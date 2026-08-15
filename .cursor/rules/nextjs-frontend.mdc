@@ -1,0 +1,111 @@
+---
+description: Next.js frontend conventions — FSD architecture, TypeScript strict mode, server/client component rules, state management, and styling
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Next.js Frontend Rules
+
+You are a senior frontend engineer working on a Next.js 14 App Router project with TypeScript strict mode.
+
+## Architecture — Feature-Sliced Design (FSD)
+
+The project uses FSD with strict top-down dependency rules:
+
+```
+app/        → pages, layouts, providers (Server Components by default)
+widgets/    → composite UI blocks (chat-window, invoice-table, sidebar)
+features/   → user actions (send-message, create-invoice, login)
+entities/   → business objects (agent, invoice, expense, conversation, user)
+shared/     → api client, ui (shadcn), hooks, lib, store, config
+```
+
+Rules:
+- **Top-down only:** `app/ → widgets/ → features/ → entities/ → shared/`
+- **Never import between features.** Use Zustand stores in `shared/store/` for cross-feature communication.
+- **Never import upward.** An entity must not import from a feature. A feature must not import from a widget.
+
+Every slice follows the internal structure:
+
+```
+slice-name/
+├── ui/      → React components
+├── model/   → types, Zod schemas, query keys, local state
+└── api/     → TanStack Query hooks (useQuery, useMutation)
+```
+
+## TypeScript
+
+- Always use TypeScript strict mode
+- Derive types from Zod schemas with `z.infer<typeof schema>` — single source of truth
+- Export query key factories from `entities/*/model/`
+
+## Components
+
+- Use functional React components only
+- Keep components small and single-responsibility
+- Use Server Components by default (`app/` pages and layouts)
+- Add `"use client"` only when the component needs interactivity (event handlers, hooks, browser APIs)
+
+| Layer | Default | Reason |
+|-------|---------|--------|
+| `app/` pages | Server Component | Fetch data on server, pass as props |
+| `app/` layouts | Server Component | Static shell, no interactivity |
+| `widgets/` | Client Component | Interactive composites (chat, tables) |
+| `features/` | Client Component | Forms, mutations, event handlers |
+| `entities/*/ui/` | Server or Client | Read-only = Server; interactive = Client |
+| `shared/ui/` | Client Component | shadcn/ui uses browser APIs |
+
+## Data Fetching
+
+- Server-side fetch in `app/` pages, pass `initialData` to TanStack Query
+- TanStack Query for all server state (`entities/*/api/`, `features/*/api/`)
+- Define `staleTime` on queries — don't refetch on every mount
+- Use `queryClient.invalidateQueries()` after mutations, not manual cache writes
+- All HTTP goes through `shared/api/client.ts` (typed ApiClient) — never raw `fetch` in components
+- Use `NEXT_PUBLIC_GATEWAY_URL` env var for the API base URL
+
+## State Management
+
+| Category | Tool | Location |
+|----------|------|----------|
+| Server state | TanStack Query | `entities/*/api/`, `features/*/api/` |
+| Streaming (chat) | `useReducer` | `widgets/chat-window/model/` |
+| Form state | React Hook Form + Zod | `features/*/ui/`, `features/*/model/` |
+| Client UI state | Zustand | `shared/store/` |
+| Auth | NextAuth `useSession()` | `shared/lib/auth.ts` |
+
+- No Redux, no React Context for state management
+- Zustand stores are small and focused — one store per concern
+- Use Zustand selectors (`useStore(s => s.field)`) to prevent unnecessary re-renders
+
+## Styling
+
+- Use Tailwind CSS — no inline styles, no CSS modules
+- Use shadcn/ui components from `shared/ui/`
+- Use `cn()` from `shared/lib/cn.ts` (clsx + tailwind-merge) for conditional classes
+- Always use responsive design (mobile-first breakpoints)
+
+## Performance
+
+- Use `next/image` for all images
+- Use `next/dynamic` for heavy components that aren't needed on initial load
+- Use `loading.tsx` and `<Suspense>` for streaming on pages with slow data
+- Use `React.memo` only when profiling shows unnecessary re-renders — don't memoize by default
+- Use `useMemo`/`useCallback` only for expensive computations or stable references passed to memoized children
+
+## Error Handling
+
+- Use `error.tsx` boundaries at the route segment level
+- Use `loading.tsx` for route-level loading states
+- Handle API failures in TanStack Query's `onError` callbacks
+- Show user-facing error messages via `shared/store/notification-store.ts`
+- Never swallow errors silently — log or display them
+
+## Auth
+
+- NextAuth with Google OAuth + Credentials providers
+- JWT stored in HTTP-only cookie
+- Protect `(dashboard)/*` routes via Next.js middleware
+- Access session with `useSession()` in client components, `getServerSession()` in server components
+- Auth Service handles user creation and JWT issuance — NextAuth never writes to MongoDB directly

@@ -1,0 +1,156 @@
+# Hintora — Architecture Overview
+
+> **Status: Phase 1 (knowledge base backend) complete.**
+> Backend API contracts, ingestion pipeline, and data layout are documented in
+> [`02-backend.md`](02-backend.md). Remaining docs — `03-widget.md`, `04-admin.md`,
+> `05-api-contracts.md` — are added in later phases per
+> `plans/hintora_poc_implementation.md`.
+
+Hintora is a browser-first AI guidance layer for SaaS web apps: an embeddable React
+widget (chat + hover hints, arriving in Phases 3–5) backed by a FastAPI RAG backend.
+A SaaS company uploads its product docs through an admin panel, then adds a single
+`<script>` tag to its app; the widget answers "how do I …?" questions grounded in
+those docs plus the current page context.
+
+## Components
+
+| Service      | Tech                              | Port (host) | Purpose                                                  |
+|--------------|-----------------------------------|-------------|----------------------------------------------------------|
+| `backend`    | Python 3.12, FastAPI, uvicorn     | 8000        | API: companies, document ingestion, retrieval ([`02-backend.md`](02-backend.md)); chat/hints in Phase 3 |
+| `mongo`      | `mongo:7`                         | —           | `companies`, `documents` metadata                         |
+| `chromadb`   | `chromadb/chroma:0.5.23`          | —           | Per-company vector collections `kb_{company_id}`          |
+| `admin`      | React 18 + Vite + TS → nginx      | 3001        | Company + knowledge-base management (shell page in Phase 0) |
+| `widget-cdn` | nginx (multi-stage pnpm build)    | 1337        | Serves `loader.js` + `hintora-widget.js` under `/embed/v1/` |
+| `demo`       | `nginx:alpine` (static mount)     | 3002        | Fake SaaS host page carrying the embed snippet            |
+
+All six services share one Docker network (`hintora-network`). Only `backend`, `admin`,
+`widget-cdn`, and `demo` are exposed to the host. ChromaDB listens on port 8000 *inside*
+the network (same as the backend) — it is intentionally never mapped to the host, so
+there is no conflict.
+
+## Request flow
+
+What works today (Phase 1 — the admin-flow half is **real**, curl-testable; the admin
+SPA UI for it lands in Phase 2):
+
+```
+Admin flow (live — API contracts in 02-backend.md):
+  client ──POST /api/v1/companies───────────────▶ backend ──▶ MongoDB (companies)
+  client ──POST /api/v1/companies/{id}/documents▶ backend ──▶ extract → chunk (800/150) → embed → ChromaDB (kb_{id})
+                                                          └─▶ MongoDB (documents metadata: processing → ready | failed)
+  client ──POST /api/v1/retrieve────────────────▶ backend ──▶ Chroma query (kb_{id}) → top-k chunks {text, filename, score}
+
+Widget (Phase 0 placeholder):
+  Browser (demo page :3002)
+    └─▶ <script src="http://localhost:1337/embed/v1/loader.js" data-hintora-company-id=…>
+          └─▶ loader.js: singleton guard → window.__HINTORA__ → injects hintora-widget.js
+                └─▶ widget bundle: #hintora-root + open Shadow DOM → placeholder badge
+
+Admin SPA (:3001) ──GET /health──▶ backend (:8000) ──ping──▶ MongoDB
+                                                   └─ping──▶ ChromaDB
+```
+
+Target end-user flow (from the master plan; built out in Phases 3–5):
+
+```
+host page <script src=".../loader.js" data-hintora-company-id="abc"> (singleton guard)
+  └─▶ widget bundle → Shadow DOM mount
+       ├─ chat:  POST /api/v1/chat  (SSE stream)   { company_id, messages, page_context }
+       └─ hint:  POST /api/v1/hint  (JSON)         { company_id, element, page_context }
+                     backend: LangGraph → Chroma retrieval (filtered by company) → LLM → response
+```
+
+## Compose service map
+
+Defined in `docker-compose.yml` (project name `hintora`):
+
+| Service      | Build / image                   | Host port | Depends on                            | Volumes                    |
+|--------------|---------------------------------|-----------|----------------------------------------|----------------------------|
+| `mongo`      | `mongo:7`                       | —         | — (healthcheck: `mongosh ping`)         | `mongo-data:/data/db`      |
+| `chromadb`   | `chromadb/chroma:0.5.23`        | —         | —                                       | `chroma-data:/chroma/chroma` |
+| `backend`    | `./backend` (python:3.12-slim)  | 8000      | `mongo` (healthy), `chromadb` (started) | —                          |
+| `admin`      | `./admin` (node:22 → nginx)     | 3001      | `backend`                               | —                          |
+| `widget-cdn` | `./widget` (node:22 → nginx)    | 1337      | —                                       | —                          |
+| `demo`       | `nginx:alpine`                  | 3002      | `widget-cdn`                            | `./demo` (read-only bind)  |
+
+Startup order: Mongo must pass its healthcheck and Chroma must start before the backend
+boots; the backend's own container healthcheck polls `/health` (stdlib `urllib`, no curl
+in the slim image). The backend still reports `degraded` (HTTP 503) if a store dies later.
+
+## Environment variables
+
+Backend settings are defined in `backend/app/config.py` (Pydantic `BaseSettings`, reads
+env vars and `.env` for local non-Docker runs). Template: `.env.example`.
+
+| Variable          | Default (settings)                  | Set by compose to                    | Consumed by |
+|-------------------|-------------------------------------|--------------------------------------|-------------|
+| `MONGODB_URL`     | `mongodb://localhost:27017/hintora` | `mongodb://mongo:27017/hintora`      | backend     |
+| `MONGODB_DB_NAME` | `hintora`                           | `hintora`                            | backend     |
+| `CHROMA_HOST`     | `localhost`                         | `chromadb`                           | backend     |
+| `CHROMA_PORT`     | `8000`                              | `8000`                               | backend     |
+| `OPENAI_API_KEY`  | `""` — empty still allows boot      | `${OPENAI_API_KEY:-}` from `.env`    | backend — **required** for document upload and `/retrieve` (503 without it) |
+| `LLM_MODEL`       | `gpt-4o-mini`                       | `${LLM_MODEL:-gpt-4o-mini}`          | backend (Phase 3) |
+| `EMBEDDING_MODEL` | `text-embedding-3-small`            | `${EMBEDDING_MODEL:-…}`              | backend (Phase 1) |
+| `CORS_ORIGINS`    | `["*"]` (POC: widget runs on arbitrary customer origins) | not overridden | backend |
+
+Admin build-time variables (Vite, baked into the bundle via Docker build args in compose):
+
+| Variable               | Compose value            | Consumed by                  |
+|------------------------|--------------------------|------------------------------|
+| `VITE_API_URL`         | `http://localhost:8000`  | admin (`src/config.ts`)      |
+| `VITE_WIDGET_CDN_URL`  | `http://localhost:1337`  | admin (embed snippet, Phase 2) |
+
+## Embed contract (Phase 0)
+
+```html
+<script src="http://localhost:1337/embed/v1/loader.js"
+        data-hintora-company-id="cmp_demo0001"
+        data-hintora-api-url="http://localhost:8000" defer></script>
+```
+
+- `data-hintora-company-id` — **required**; loader logs an error and aborts without it.
+- `data-hintora-api-url` — optional; defaults to `http://localhost:8000`.
+- **Singleton guard**: the loader sets `window.__HINTORA__`; a second tag on the same
+  page is a no-op with a console warning (the demo page includes a duplicate tag to keep
+  this permanently tested).
+- The loader injects `hintora-widget.js`, resolved relative to its own `src`, so loader
+  and bundle always come from the same CDN path (`/embed/v1/`).
+- The bundle mounts `#hintora-root` (`position: fixed`, max z-index) with an **open
+  Shadow DOM** for two-way style isolation. In Phase 0 it renders a placeholder badge
+  ("Hintora · {companyId}", bottom-right); Phase 4 swaps in the real widget UI only.
+- CDN caching: `loader.js` is served with `Cache-Control: no-cache`; both files get
+  `Access-Control-Allow-Origin: *`.
+
+## Backend layering
+
+`backend/app/` follows `routes/ → services/ → repositories/ → models/` (top-down only).
+As of Phase 1 the layers are populated: routes for companies, documents, and retrieve;
+services for company management, ingestion, retrieval, and text extraction;
+repositories for Mongo (`companies`, `documents`) and Chroma (`kb_{company_id}`).
+`ai/` remains reserved for Phase 3 (LangGraph). Full inventory, API contracts, and the
+ingestion pipeline are documented in [`02-backend.md`](02-backend.md).
+
+## Running the stack
+
+```bash
+cp .env.example .env          # set OPENAI_API_KEY — required for upload/retrieve
+docker compose up --build
+
+curl -s http://localhost:8000/health
+# → {"status":"ok","mongo":"ok","chroma":"ok"}   (503 + "degraded" if a store is down)
+
+open http://localhost:3001    # admin shell, API status badge
+open http://localhost:3002    # demo page, one Hintora badge bottom-right
+```
+
+For the full create-company → upload → retrieve walkthrough, see
+[`02-backend.md`](02-backend.md#end-to-end-curl-walkthrough) (also in the README).
+
+Common failure modes:
+
+- **`pnpm install --frozen-lockfile` fails on first build** — generate
+  `pnpm-lock.yaml` in `widget/` and `admin/` locally (`pnpm install`) before building.
+- **Node/pnpm mismatch** — images use `node:22-alpine` with `packageManager: pnpm@9.15.9`
+  pinned; do not downgrade to node:20 (corepack resolves a pnpm that needs Node ≥ 22).
+- **Mongo not ready** — compose gates the backend on the Mongo healthcheck; if `/health`
+  shows `"mongo":"error: …"` after startup, check `docker compose logs mongo`.

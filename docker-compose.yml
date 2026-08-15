@@ -1,0 +1,67 @@
+name: hintora
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    networks: [hintora-network]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    volumes:
+      - chroma-data:/chroma/chroma
+    networks: [hintora-network]
+
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/hintora
+      - MONGODB_DB_NAME=hintora
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    networks: [hintora-network]
+
+  admin:
+    build:
+      context: ./admin
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_WIDGET_CDN_URL: http://localhost:1337
+    ports: ["3001:80"]
+    depends_on: [backend]
+    networks: [hintora-network]
+
+  widget-cdn:
+    build: ./widget
+    ports: ["1337:80"]
+    networks: [hintora-network]
+
+  demo:
+    image: nginx:alpine
+    volumes:
+      - ./demo:/usr/share/nginx/html:ro
+    ports: ["3002:80"]
+    depends_on: [widget-cdn]
+    networks: [hintora-network]
+
+networks:
+  hintora-network: {}
+
+volumes:
+  mongo-data: {}
+  chroma-data: {}

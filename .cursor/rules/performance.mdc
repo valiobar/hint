@@ -1,0 +1,39 @@
+---
+description: Performance rules that apply to all code — async patterns, connection pooling, query optimization, caching, and profiling
+alwaysApply: true
+---
+
+# Performance Rules
+
+## Backend (Python / FastAPI)
+
+- Always use `async def` for endpoints and I/O-bound operations
+- Use connection pooling for MongoDB (Motor's default pool) and Redis (`ConnectionPool`)
+- Define Pydantic `response_model` on every endpoint to avoid serializing unnecessary fields
+- Avoid N+1 queries — use `$in`, `$lookup`, or batch fetches instead of looping single reads
+- Add MongoDB indexes for fields used in filters, sorts, and unique constraints
+
+```python
+# ❌ N+1: one query per agent
+agents = await db.agents.find({"user_id": uid}).to_list(None)
+for agent in agents:
+    agent["conversations"] = await db.conversations.find({"agent_id": agent["_id"]}).to_list(None)
+
+# ✅ Batch: two queries total
+agents = await db.agents.find({"user_id": uid}).to_list(None)
+agent_ids = [a["_id"] for a in agents]
+convos = await db.conversations.find({"agent_id": {"$in": agent_ids}}).to_list(None)
+```
+
+## Frontend (Next.js)
+
+- Prefer React Server Components — only add `"use client"` when the component needs interactivity
+- Minimize client-side JavaScript bundles; move data fetching to server components or route handlers
+- Set `Cache-Control` / `revalidate` headers on API responses and `fetch()` calls
+- Use streaming (`loading.tsx`, `Suspense`) for pages with slow data sources
+
+## General
+
+- Measure before optimizing — use profiling data, not assumptions
+- Add structured logging (`structlog` or `logging` with JSON) to identify slow paths
+- Use profiling tools: `py-spy` for Python, React DevTools Profiler for frontend, `mongosh explain()` for queries

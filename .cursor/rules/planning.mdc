@@ -1,0 +1,423 @@
+---
+description: Whenever a plan or implementation plan is mentioned, use this rule for working with implementation plans, executing steps, and following structured development workflows.
+alwaysApply: false
+---
+
+# Implementation Plans Workflow
+
+## Non-Negotiables (Must Do Every Time)
+
+- **Read `docs/` first (before planning or executing)**: Before creating a new plan or executing steps from an existing plan, read the relevant architecture and service docs in `docs/`. If documentation is missing or outdated, treat that as a deliverable and plan to fix it (see **Documentation Update** and **Documentation Quality Bar** below).
+- **Track progress in the plan as you implement**: When you complete a step, immediately mark it as complete in the plan (✅) and update any “Files to Modify” / “Missing” checklists so the plan stays synchronized with reality.
+- **Use real completion emoji characters**: Write the literal `✅` character in plan headings and checkmark notes (not `:white_check_mark:`, `?`, or `[x]`) so plan progress renders consistently.
+- **Verify emoji integrity after edits**: After updating plan progress, re-check the edited headings/checklists to ensure `✅` stayed literal. If any marker appears as `?`, replace it immediately with the real Unicode `✅` before considering the step done.
+- **Normalize corrupted markers immediately**: If you see replacement/corruption artifacts (for example `�`, `?`, or mixed symbols) in step headings or checklist bullets, normalize them to literal `✅` in the same edit before finishing.
+- **Post-edit marker scan is required**: After every plan edit, run a quick scan of the edited plan for broken completion markers in common forms (e.g. `### ? Step`, `### � Step`, `- ? \`path\``, `- � \`path\``) and fix them before finalizing.
+- **UTF-8 plan encoding is mandatory**: Plan files (`plans/*.md`) must be saved as UTF-8. If a plan shows `unknown-8bit`/non-UTF-8 behavior, convert it to UTF-8 immediately before any further plan updates.
+- **Encoding guardrail before finalize**: Before finishing plan edits, verify that completion markers still render as literal `✅` after save/reload. If they regress to `?`, treat it as an encoding issue and fix file encoding first, then re-apply markers.
+- **Editor settings consistency**: Keep markdown files aligned with `.editorconfig` (`charset = utf-8`) and avoid workflows/tools that rewrite plan files with legacy encodings.
+- **CRITICAL completion gate**: A step is **not done** until the plan has been updated (✅ step heading + checked files + updated Missing/Implemented notes). If implementation work finishes but the plan isn’t updated, treat the step as **incomplete** and fix the plan immediately before moving on.
+- **Keep documentation rich and useful**: Documentation must be written for both humans and future AI runs. Prefer concrete examples, explicit contracts, and runnable instructions over vague prose.
+
+## Plan Structure Understanding
+
+Implementation plans typically follow this structure:
+
+- **Overview**: High-level description of what needs to be implemented
+- **Pros / Cons**: Trade-offs of the chosen approach — what we gain and what we accept as downsides. Helps reviewers quickly evaluate the design decision before diving into steps
+- **Current State Analysis**: What exists (✅) and what's missing (❌)
+- **Implementation Steps**: Numbered, sequential steps with specific file locations, code changes, and **mandatory pseudo-code** for each step
+- **Edge Cases**: Special scenarios to handle
+- **Testing Checklist**: Items to verify after implementation
+- **Files to Modify**: List of files that will be changed
+- **Implementation Order**: Recommended sequence for executing steps
+- **Documentation Update**: **Mandatory** final step to review and update the relevant docs in `docs/`. This step must always be present in the plan, even if no documentation changes are needed — in that case, the step should explicitly state why no updates are required
+
+## Plan File Management
+
+### Plan File Location
+
+- **Default Location**: All implementation plans should be stored in the `plans/` folder at the root of the project
+- **File Naming**: Use descriptive names with underscores and the `.md` extension (e.g., `auth_service_setup.md`)
+- **Create Folder if Missing**: If the `plans/` folder doesn't exist, create it before creating plan files
+
+### Creating New Plans
+
+When creating a new implementation plan:
+
+1. **Check for Plans Folder**: Verify `plans/` folder exists at project root
+2. **Create Folder if Needed**: If it doesn't exist, create the `plans/` directory
+3. **Create Plan File**: Create a new `.md` file in the `plans/` folder with a descriptive name (e.g., `auth_service_setup.md`)
+4. **Follow Plan Structure**: Use the standard plan structure (Overview, Pros / Cons, Current State, Steps, etc.). **Every step must include a Pseudo-code block** — no exceptions
+5. **Add Pros / Cons Section**: Immediately after the Overview, include a **Pros / Cons** section that lists the benefits and drawbacks of the chosen approach. Each item should be a concise bullet point
+6. **Add Documentation Update Step (MANDATORY)**: Every plan must include a final step titled "Update Documentation". Review the relevant docs in `docs/` and update them if the implementation introduces new patterns, changes architecture, or adds new concepts. If no documentation changes are needed, the step must still be present with a note explaining why no updates are required
+
+### Updating Existing Plans
+
+When updating implementation plans:
+
+1. **Mark Completed Steps**: Add checkmarks (✅) to steps that are fully implemented
+2. **Mark Modified Files**: Add checkmarks (✅) to files in the "Files to Modify" section that have been changed
+3. **Mark Completed Missing Components**: When a missing component from the "❌ Missing Components" section is implemented, mark it with ✅ and add a note indicating which step completed it
+4. **Use Literal Emoji**: Use the real Unicode `✅` character for completed step headings and checklist updates (avoid shortcodes and ASCII fallbacks)
+5. **Update Progress**: Keep the plan file synchronized with actual implementation status
+
+**Progress update rule (stricter)**:
+
+- After finishing any step (or small batch of steps), update the plan immediately:
+  - Mark the step heading as complete (e.g., `### ✅ Step 4: ...`)
+  - Check off the corresponding file(s) in **Files to Modify**
+  - Update **❌ Missing** → **✅ Implemented** with a brief note pointing to the completing step(s)
+
+## Working with Implementation Plans
+
+### When a Plan is Referenced
+
+1. **Read the Full Plan**: Understand the complete context before starting
+2. **Identify Current Step**: Determine which step(s) the user wants to execute
+3. **Check Prerequisites**: Verify previous steps are completed
+4. **Follow Step Details**: Execute exactly as specified in the plan
+
+### Executing Plan Steps
+
+#### Step Execution Protocol
+
+1. **Read the Step Details**:
+   - File path(s) to modify
+   - Specific changes required
+   - Code location hints (line numbers, function names, etc.)
+   - Dependencies on other steps
+
+2. **Reference Relevant Docs in `docs/` (required)**:
+   - Read the architecture/service docs that apply to the step (gateway, auth, data contracts, infra, etc.)
+   - Follow the documented patterns/concepts as the source of truth during implementation
+   - If docs are missing or outdated, do **not** update docs mid-execution — note the gap and ensure the plan’s final “Update Documentation” step captures the needed doc changes
+
+3. **Verify Current State**:
+   - Read the target file(s) to understand current implementation
+   - Check if prerequisites from previous steps are in place
+   - Identify exact locations for changes
+
+4. **Implement Changes**:
+   - Make changes exactly as specified in the plan
+   - Follow code style guidelines from other rules
+   - Preserve existing functionality not mentioned in the step
+   - Add necessary imports and dependencies
+
+5. **Verify Implementation**:
+   - Check for linting errors
+   - Ensure code compiles/runs
+   - Verify the change matches the step description
+
+6. **Update Plan Progress (required)**:
+   - Mark the step(s) as complete in the relevant `plans/*.md` file (✅ in the step heading)
+   - Check off the corresponding entries in **Files to Modify**
+   - Update any **❌ Missing** → **✅ Implemented** sections with a brief note pointing to the completing step(s)
+
+#### Multiple Steps Execution
+
+When executing multiple steps:
+
+- **Execute in Order**: Follow the implementation order specified in the plan
+- **Complete Each Step Fully**: Don't partially implement steps
+- **Verify After Each Step**: Check for errors before moving to the next step
+- **Update Progress**: Mark completed steps if the plan has a checklist
+
+### Plan Step Format
+
+**Every step MUST include a `**Pseudo-code**` block.** This is not optional — even simple steps (creating a file, adding a config entry) must have pseudo-code showing the expected structure or logic. This makes plans self-contained and executable without guessing.
+
+Steps follow this template:
+
+```
+### Step N: [Title]
+
+**File(s)**: `path/to/file.ext`
+
+**Changes**:
+- Specific change 1
+- Specific change 2
+- Code location hints
+
+**Pseudo-code**:
+
+A code block showing the expected implementation structure, key logic,
+function signatures, class outlines, or config shape. Use the actual
+language of the target file (Python, TypeScript, YAML, etc.).
+Should be concrete enough to copy-paste and adapt, not vague descriptions.
+
+**Code Location** (if modifying existing file): Around line X or in function Y
+```
+
+**Example step with pseudo-code (Python service):**
+
+```
+### Step 3: Implement user repository
+
+**File(s)**: `services/auth/app/repositories/user_repo.py`
+
+**Changes**:
+- Create UserRepository class with MongoDB access
+- Add find_by_email, create, find_by_id methods
+
+**Pseudo-code**:
+```
+
+```python
+class UserRepository:
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db["users"]
+
+    async def find_by_email(self, email: str) -> UserInDB | None:
+        doc = await self.collection.find_one({"email": email})
+        return UserInDB(**doc) if doc else None
+
+    async def create(self, user: UserCreate) -> UserInDB:
+        user_dict = user.model_dump()
+        user_dict["created_at"] = datetime.utcnow()
+        result = await self.collection.insert_one(user_dict)
+        user_dict["_id"] = result.inserted_id
+        return UserInDB(**user_dict)
+
+    async def find_by_id(self, user_id: str) -> UserInDB | None:
+        doc = await self.collection.find_one({"_id": ObjectId(user_id)})
+        return UserInDB(**doc) if doc else None
+```
+
+**Example step with pseudo-code (Docker / config):**
+
+```
+### Step 1: Add auth service to Docker Compose
+
+**File(s)**: `docker-compose.yml`
+
+**Changes**:
+- Add auth service definition with build context, ports, env vars, depends_on
+
+**Pseudo-code**:
+```
+
+```yaml
+auth:
+  build:
+    context: ./services/auth
+    dockerfile: Dockerfile
+  ports:
+    - "8001:8001"
+  environment:
+    - MONGODB_URL=mongodb://mongodb:27017/agents
+    - JWT_SECRET=${JWT_SECRET}
+  depends_on:
+    - mongodb
+  networks:
+    - agents-network
+```
+
+**Example step with pseudo-code (Frontend):**
+
+```
+### Step 5: Create login page
+
+**File(s)**: `frontend/src/app/login/page.tsx`
+
+**Changes**:
+- Create login form with email/password fields
+- Handle submit via NextAuth signIn()
+- Redirect to dashboard on success
+
+**Pseudo-code**:
+```
+
+```tsx
+export default function LoginPage() {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(formData: FormData) {
+    const result = await signIn("credentials", {
+      email: formData.get("email"),
+      password: formData.get("password"),
+      redirect: false,
+    });
+
+    if (result?.error) {
+      setError("Invalid credentials");
+    } else {
+      router.push("/dashboard");
+    }
+  }
+
+  return (
+    <form action={handleSubmit}>
+      <Input name="email" type="email" placeholder="Email" />
+      <Input name="password" type="password" placeholder="Password" />
+      {error && <p className="text-red-500">{error}</p>}
+      <Button type="submit">Sign In</Button>
+    </form>
+  );
+}
+```
+
+### Pseudo-code Requirements
+
+**Every step in a plan MUST include pseudo-code.** No exceptions.
+
+**What counts as valid pseudo-code:**
+
+- Actual code in the target language (Python, TypeScript, YAML, SQL, Dockerfile, shell, etc.)
+- Function/class signatures with key logic filled in
+- Config file structures with realistic values
+- API endpoint definitions with request/response shapes
+- Database queries or aggregation pipelines
+
+**What does NOT count:**
+
+- Plain English descriptions like "create a function that does X"
+- Empty function bodies with only comments
+- Vague outlines like "similar to the auth service"
+
+**Guidelines:**
+
+- Use the real language of the target file, not generic pseudo-code
+- Include imports when they clarify dependencies
+- Show error handling and edge cases where relevant
+- Keep each block focused on that step's scope — don't dump the entire file
+- For test steps, show concrete test cases with assertions
+- Match project conventions (Pydantic models for Python, shadcn/ui for frontend, etc.)
+
+### Common Step Types
+
+#### 1. Service Setup
+
+- Scaffold a new microservice (Dockerfile, requirements, app structure)
+- Configure FastAPI application with routes, services, repositories
+- Set up database connections and models
+
+#### 2. API Endpoint Implementation
+
+- Define Pydantic request/response models
+- Implement route handlers
+- Wire up service and repository layers
+
+#### 3. Business Logic
+
+- Implement service-layer orchestration
+- Add validation rules
+- Handle cross-service communication
+
+#### 4. Data Layer
+
+- Define MongoDB collection schemas (Pydantic models)
+- Implement repository methods (CRUD, queries, aggregations)
+- Set up indexes and constraints
+
+#### 5. Infrastructure / Config
+
+- Docker Compose service definitions
+- Environment variable configuration
+- Inter-service networking and port mapping
+
+#### 6. Frontend Implementation
+
+- Page and layout components
+- API client integration
+- Auth flow and protected routes
+
+### Prerequisites: Familiarize Yourself with the Architecture
+
+**CRITICAL: Before creating or executing any implementation plan, ALWAYS read the relevant architecture documentation in `docs/`. Do NOT skip this step -- incorrect assumptions about architecture lead to inconsistencies and broken service boundaries.**
+
+The `docs/` folder contains architecture documentation that describes the system design. You must be familiar with the relevant docs before planning.
+
+**When to read which docs:**
+
+- **Creating a new plan**: Read at minimum the architecture overview in `docs/` to understand the overall structure. Then read any docs relevant to the services your plan touches.
+- **Executing an existing plan**: Read the docs relevant to the services/layers being modified in the plan steps you are executing.
+- **Unsure where something lives**: Check the architecture overview and the plan file at `plans/` for the repository structure.
+
+**Documentation-first requirement**:
+
+- Plans should explicitly reference which `docs/` pages were reviewed (at least in your own working notes / summary), especially when touching service boundaries, auth, data contracts, or infrastructure.
+
+### Best Practices
+
+#### Before Starting
+
+- Read the entire plan to understand the full scope
+- Identify all files that will be modified
+- Understand dependencies between steps
+- Check if any prerequisites are needed
+- **Read `docs/` folder**: Familiarize yourself with existing architecture documentation before making decisions
+
+#### During Implementation
+
+- Follow the exact file paths and locations specified
+- Maintain code style consistency
+- Add proper types (TypeScript for frontend, Pydantic for Python services)
+- Follow the layered architecture: routes -> services -> repositories -> models
+- Respect service boundaries — services communicate through the API gateway, not by importing each other's code
+
+#### After Implementation
+
+- Run linters to check for errors
+- Verify the implementation matches the step description
+- Check if the change integrates with existing code
+- **Update docs (MANDATORY)**: As the last step, always review the relevant docs in `docs/`. Update them if the implementation introduces new patterns, changes architecture, adds new concepts, or modifies existing patterns. If no update is needed, still complete this step and explicitly state the reason (e.g., "Reviewed docs — no updates needed because this change does not affect architecture or introduce new patterns")
+
+### Documentation Quality Bar (Humans + AI)
+
+When adding or updating documentation (in `docs/` and/or service READMEs), aim for “high signal, runnable, and contract-focused”:
+
+- **Audience**: Write for both (1) a new engineer onboarding and (2) an AI agent picking up the repo later.
+- **Runnability**: Include exact run commands (e.g., `docker compose up --build`), required env vars, expected ports, and common failure modes.
+- **Contracts**: Document API endpoints with request/response shapes, auth requirements (JWT), error codes, and example payloads.
+- **Configuration**: List environment variables, defaults, and which service consumes each variable.
+- **Architecture alignment**: Explicitly state service boundaries, ownership of data (collections), and how traffic flows through the gateway.
+- **Examples**: Prefer concrete examples and tables over vague statements. Include at least one end-to-end example per key workflow (e.g., login → token issuance → gateway-proxied request).
+
+### Handling Plan Updates
+
+If the plan needs to be updated:
+
+- **Document Changes**: Note what was different from the plan
+- **Update Plan File**: If the plan is a markdown file, update it to reflect actual implementation
+- **Note Deviations**: Explain why changes were made if they differ from the plan
+
+### Plan Execution Checklist
+
+When executing steps from a plan:
+
+- [ ] Read and understand the full plan context
+- [ ] Read relevant `docs/` documentation before starting
+- [ ] Identify which step(s) to execute
+- [ ] Verify prerequisites are met
+- [ ] Read target file(s) to understand current state
+- [ ] Verify step has pseudo-code; if missing, add it before implementing
+- [ ] Implement changes as specified
+- [ ] Check for linting/compilation errors
+- [ ] Verify implementation matches step description
+- [ ] Test the changes if possible
+- [ ] Mark step as complete in plan with ✅ checkmark
+- [ ] Mark modified files in "Files to Modify" section with ✅ checkmark
+- [ ] Mark completed missing components in "❌ Missing Components" section with ✅ checkmark and note which step completed it
+- [ ] **Update Documentation (MANDATORY)**: As the last step, review relevant `docs/` files. If changes are needed, update them. If no changes are needed, explicitly mark the step as complete with a note explaining why
+
+### Error Handling
+
+If a step cannot be executed as written:
+
+1. **Identify the Issue**: What prevents following the plan exactly?
+2. **Check Context**: Is there missing information or changed code?
+3. **Ask for Clarification**: Request guidance if the plan is unclear
+4. **Propose Alternative**: Suggest an alternative approach if needed
+5. **Document Deviation**: Note any changes from the original plan
+
+### Integration with Other Rules
+
+When executing plan steps:
+
+- **Follow Code Style Rules**: Apply general coding guidelines from other rules
+- **Respect Service Boundaries**: Each microservice is independent — no cross-service imports
+- **Follow Layered Architecture**: routes -> services -> repositories -> models within each service
+- **Use Repository Pattern**: All database access goes through repository classes
+- **Maintain Docker Compose Compatibility**: New services must be added to docker-compose.yml

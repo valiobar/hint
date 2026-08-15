@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acme Invoicing — Demo Host</title>
+  <style>
+    /* Intentionally aggressive host styles — widget must survive via Shadow DOM */
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background: #f0f4f8;
+      color: #1a202c;
+    }
+    nav {
+      display: flex;
+      gap: 1.5rem;
+      padding: 1rem 1.5rem;
+      background: #1a365d;
+    }
+    nav a {
+      color: #bee3f8;
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    main {
+      padding: 2rem 1.5rem;
+      max-width: 40rem;
+    }
+    h1 {
+      margin: 0 0 1.25rem;
+      font-size: 1.75rem;
+    }
+    button, input {
+      font: inherit;
+      padding: 0.5rem 0.75rem;
+      margin: 0.35rem 0.35rem 0.35rem 0;
+    }
+    form {
+      margin-top: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="#">Invoices</a>
+    <a href="#">Reports</a>
+    <a href="#">Settings</a>
+  </nav>
+  <main>
+    <h1>Invoices</h1>
+    <button id="export-report" type="button">Export report</button>
+    <form>
+      <input name="customer" placeholder="Customer name">
+      <button type="submit">Create invoice</button>
+    </form>
+  </main>
+
+  <script src="http://localhost:1337/embed/v1/loader.js"
+          data-hintora-company-id="cmp_demo0001"
+          data-hintora-api-url="http://localhost:8000" defer></script>
+  <!-- duplicate on purpose: must be a no-op (singleton guard) -->
+  <script src="http://localhost:1337/embed/v1/loader.js"
+          data-hintora-company-id="cmp_other" defer></script>
+</body>
+</html>
