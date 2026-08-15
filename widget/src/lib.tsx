@@ -1,20 +1,20 @@
 import { createRoot } from 'react-dom/client';
 
 const PlaceholderBadge = ({ companyId }: { companyId: string }) => (
-	<div className="badge" data-testid="hintora-placeholder-badge">
-		Hintora · {companyId}
+	<div className="badge" data-testid="hint-placeholder-badge">
+		Hint · {companyId}
 	</div>
 );
 
 const mount = () => {
-	const config = window.__HINTORA__;
+	const config = window.__HINT__;
 	if (!config || config.mounted) {
 		return;
 	}
 	config.mounted = true;
 
 	const host = document.createElement('div');
-	host.id = 'hintora-root';
+	host.id = 'hint-root';
 	host.style.cssText = 'position:fixed;z-index:2147483647;';
 	document.body.appendChild(host);
 

@@ -9,5 +9,5 @@ RUN pnpm build
 
 FROM nginx:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist/hintora-widget.js /usr/share/nginx/html/embed/v1/
+COPY --from=build /app/dist/hint-widget.js /usr/share/nginx/html/embed/v1/
 COPY --from=build /app/public/loader.js       /usr/share/nginx/html/embed/v1/

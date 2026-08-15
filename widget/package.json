@@ -1,5 +1,5 @@
 {
-	"name": "hintora-widget",
+	"name": "hint-widget",
 	"private": true,
 	"version": "0.0.0",
 	"packageManager": "pnpm@9.15.9",

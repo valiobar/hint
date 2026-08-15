@@ -1,6 +1,6 @@
 # Phase 1 — Knowledge Base Backend (Detailed Implementation Plan)
 
-> Parent plan: `plans/hintora_poc_implementation.md` (Phase 1, Steps 1.1–1.3).
+> Parent plan: `plans/hint_poc_implementation.md` (Phase 1, Steps 1.1–1.3).
 > Docs reviewed: `docs/01-architecture-overview.md` (compose map, env vars, backend
 > layering, Phase 0 status).
 > Goal: companies CRUD + document ingestion (parse → chunk → embed → Chroma) +

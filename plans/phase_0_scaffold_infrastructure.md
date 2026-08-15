@@ -1,6 +1,6 @@
 # Phase 0 — Repo Scaffold & Infrastructure (Detailed Implementation Plan)
 
-> Parent plan: `plans/hintora_poc_implementation.md` (Phase 0, Steps 0.1–0.2).
+> Parent plan: `plans/hint_poc_implementation.md` (Phase 0, Steps 0.1–0.2).
 > Goal: a monorepo where `docker compose up --build` boots the full stack — Mongo,
 > ChromaDB, FastAPI backend (with `/health`), admin SPA shell, widget CDN (nginx serving
 > a placeholder `loader.js` + bundle), and a demo host page. No business logic yet.
@@ -15,11 +15,11 @@ Phase 0 creates the skeleton every later phase plugs into:
   clients, permissive CORS, and a `/health` endpoint that verifies both stores are
   reachable. Layered folders (`routes/`, `services/`, `repositories/`, `models/`, `db/`,
   `ai/`) are created empty (with `__init__.py`) so Phase 1+ steps only add files.
-- **Widget**: Vite + React + TS project with an IIFE build named `hintora-widget.js`, a
+- **Widget**: Vite + React + TS project with an IIFE build named `hint-widget.js`, a
   placeholder mount (console log + tiny badge in Shadow DOM proving isolation works), and
   the real `loader.js` with the singleton guard (written once here, reused unchanged in
   Phase 4). Multi-stage Dockerfile → nginx serving `/embed/v1/`.
-- **Admin**: Vite + React + TS shell ("Hintora Admin" placeholder page), multi-stage
+- **Admin**: Vite + React + TS shell ("Hint Admin" placeholder page), multi-stage
   Dockerfile → nginx.
 - **Demo**: static placeholder page already carrying the embed snippet (+ duplicate tag),
   served by stock nginx.
@@ -60,7 +60,7 @@ once (duplicate tag ignored).
 
 ### ✅ Existing
 
-- `plans/hintora_poc_implementation.md` — approved master plan.
+- `plans/hint_poc_implementation.md` — approved master plan.
 - `.cursor/rules/` — workspace rules.
 - Reference for the widget build/CDN pattern: `~/Projects/marketing-app`
   (Vite IIFE build, loader.js, nginx CDN container, pnpm).
@@ -130,7 +130,7 @@ OPENAI_API_KEY=sk-...            # required from Phase 1 (ingestion/chat); stack
 LLM_MODEL=gpt-4o-mini
 EMBEDDING_MODEL=text-embedding-3-small
 # set automatically inside compose; override only for local (non-docker) runs:
-# MONGODB_URL=mongodb://localhost:27017/hintora
+# MONGODB_URL=mongodb://localhost:27017/hint
 # CHROMA_HOST=localhost
 # CHROMA_PORT=8001
 ```
@@ -188,8 +188,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    mongodb_url: str = "mongodb://localhost:27017/hintora"
-    mongodb_db_name: str = "hintora"
+    mongodb_url: str = "mongodb://localhost:27017/hint"
+    mongodb_db_name: str = "hint"
     chroma_host: str = "localhost"
     chroma_port: int = 8000
 
@@ -304,7 +304,7 @@ async def lifespan(app: FastAPI):
     mongo.close()
 
 
-app = FastAPI(title="Hintora Backend", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Hint Backend", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
@@ -383,7 +383,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 **Changes**:
 - pnpm project; Vite `build.lib` in IIFE mode emitting a single self-contained
-  `hintora-widget.js` (React bundled in — the host page provides nothing).
+  `hint-widget.js` (React bundled in — the host page provides nothing).
 - `loader.js` is the **final** loader (singleton guard + attribute parsing from the master
   plan Step 4.1) — written once here, not a throwaway.
 - `lib.tsx` mounts a placeholder badge inside a Shadow DOM so Phase 0 already proves
@@ -396,7 +396,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```jsonc
 // widget/package.json (essentials)
 {
-	"name": "hintora-widget",
+	"name": "hint-widget",
 	"private": true,
 	"scripts": { "dev": "vite", "build": "tsc -b && vite build" },
 	"dependencies": { "react": "^18.3.0", "react-dom": "^18.3.0", "zustand": "^5.0.0" },
@@ -415,9 +415,9 @@ export default defineConfig({
 	build: {
 		lib: {
 			entry: 'src/lib.tsx',
-			name: 'HintoraWidget',
+			name: 'HintWidget',
 			formats: ['iife'],
-			fileName: () => 'hintora-widget.js',
+			fileName: () => 'hint-widget.js',
 		},
 	},
 });
@@ -426,45 +426,45 @@ export default defineConfig({
 ```typescript
 // widget/public/loader.js (final version — plain JS, no build step)
 (() => {
-	if (window.__HINTORA__) {
-		console.warn('Hintora is already initialized on this page');
+	if (window.__HINT__) {
+		console.warn('Hint is already initialized on this page');
 		return;
 	}
 	const tag = document.currentScript;
-	const companyId = tag && tag.getAttribute('data-hintora-company-id');
+	const companyId = tag && tag.getAttribute('data-hint-company-id');
 	if (!companyId) {
-		console.error('Hintora: data-hintora-company-id is required');
+		console.error('Hint: data-hint-company-id is required');
 		return;
 	}
-	window.__HINTORA__ = {
+	window.__HINT__ = {
 		companyId,
-		apiUrl: tag.getAttribute('data-hintora-api-url') || 'http://localhost:8000',
+		apiUrl: tag.getAttribute('data-hint-api-url') || 'http://localhost:8000',
 	};
 	const script = document.createElement('script');
-	script.src = new URL('hintora-widget.js', tag.src).href;
+	script.src = new URL('hint-widget.js', tag.src).href;
 	script.defer = true;
 	document.head.appendChild(script);
 })();
 ```
 
 ```tsx
-// widget/src/lib.tsx — Phase 0 placeholder mount (Phase 4 swaps <PlaceholderBadge /> for <HintoraApp />)
+// widget/src/lib.tsx — Phase 0 placeholder mount (Phase 4 swaps <PlaceholderBadge /> for <HintApp />)
 import { createRoot } from 'react-dom/client';
 
 const PlaceholderBadge = ({ companyId }: { companyId: string }) => (
-	<div className="badge" data-testid="hintora-placeholder-badge">
-		Hintora · {companyId}
+	<div className="badge" data-testid="hint-placeholder-badge">
+		Hint · {companyId}
 	</div>
 );
 
 const mount = () => {
-	const config = window.__HINTORA__;
+	const config = window.__HINT__;
 	if (!config || config.mounted) {
 		return;
 	}
 	config.mounted = true;
 	const host = document.createElement('div');
-	host.id = 'hintora-root';
+	host.id = 'hint-root';
 	host.style.cssText = 'position:fixed;z-index:2147483647;';
 	document.body.appendChild(host);
 	const shadow = host.attachShadow({ mode: 'open' });
@@ -486,14 +486,14 @@ if (document.readyState === 'loading') {
 
 ```typescript
 // widget/src/global.d.ts
-interface HintoraGlobal {
+interface HintGlobal {
 	companyId: string;
 	apiUrl: string;
 	mounted?: boolean;
 }
 
 interface Window {
-	__HINTORA__?: HintoraGlobal;
+	__HINT__?: HintGlobal;
 }
 ```
 
@@ -509,7 +509,7 @@ RUN pnpm build
 
 FROM nginx:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist/hintora-widget.js /usr/share/nginx/html/embed/v1/
+COPY --from=build /app/dist/hint-widget.js /usr/share/nginx/html/embed/v1/
 COPY --from=build /app/public/loader.js       /usr/share/nginx/html/embed/v1/
 ```
 
@@ -538,7 +538,7 @@ server {
 `admin/src/config.ts`, `admin/Dockerfile`, `admin/nginx.conf`
 
 **Changes**:
-- Standard Vite React SPA. Phase 0 renders a shell page ("Hintora Admin" header + note
+- Standard Vite React SPA. Phase 0 renders a shell page ("Hint Admin" header + note
   that company management arrives in Phase 2) and reads `VITE_API_URL` /
   `VITE_WIDGET_CDN_URL` (build args) into a typed config module.
 - Same multi-stage Dockerfile pattern as the widget; nginx with SPA fallback.
@@ -553,7 +553,7 @@ export const WIDGET_CDN_URL: string = import.meta.env.VITE_WIDGET_CDN_URL ?? 'ht
 // admin/src/app.tsx — Phase 0 shell
 export const App = () => (
 	<main className={styles.shell}>
-		<h1>Hintora Admin</h1>
+		<h1>Hint Admin</h1>
 		<p>Company &amp; knowledge-base management arrives in Phase 2.</p>
 		<ApiStatusBadge />   {/* fetches `${API_URL}/health`, shows ok/degraded */}
 	</main>
@@ -619,25 +619,25 @@ server {
   </main>
 
   <script src="http://localhost:1337/embed/v1/loader.js"
-          data-hintora-company-id="cmp_demo0001"
-          data-hintora-api-url="http://localhost:8000" defer></script>
+          data-hint-company-id="cmp_demo0001"
+          data-hint-api-url="http://localhost:8000" defer></script>
   <!-- duplicate on purpose: must be a no-op (singleton guard) -->
   <script src="http://localhost:1337/embed/v1/loader.js"
-          data-hintora-company-id="cmp_other" defer></script>
+          data-hint-company-id="cmp_other" defer></script>
 </body>
 </html>
 ```
 
 ```yaml
 # docker-compose.yml
-name: hintora
+name: hint
 
 services:
   mongo:
     image: mongo:7
     volumes:
       - mongo-data:/data/db
-    networks: [hintora-network]
+    networks: [hint-network]
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 5s
@@ -648,14 +648,14 @@ services:
     image: chromadb/chroma:0.5.23
     volumes:
       - chroma-data:/chroma/chroma
-    networks: [hintora-network]
+    networks: [hint-network]
 
   backend:
     build: ./backend
     ports: ["8000:8000"]
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/hintora
-      - MONGODB_DB_NAME=hintora
+      - MONGODB_URL=mongodb://mongo:27017/hint
+      - MONGODB_DB_NAME=hint
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -664,7 +664,7 @@ services:
     depends_on:
       mongo: { condition: service_healthy }
       chromadb: { condition: service_started }
-    networks: [hintora-network]
+    networks: [hint-network]
 
   admin:
     build:
@@ -674,12 +674,12 @@ services:
         VITE_WIDGET_CDN_URL: http://localhost:1337
     ports: ["3001:80"]
     depends_on: [backend]
-    networks: [hintora-network]
+    networks: [hint-network]
 
   widget-cdn:
     build: ./widget
     ports: ["1337:80"]
-    networks: [hintora-network]
+    networks: [hint-network]
 
   demo:
     image: nginx:alpine
@@ -687,10 +687,10 @@ services:
       - ./demo:/usr/share/nginx/html:ro
     ports: ["3002:80"]
     depends_on: [widget-cdn]
-    networks: [hintora-network]
+    networks: [hint-network]
 
 networks:
-  hintora-network: {}
+  hint-network: {}
 
 volumes:
   mongo-data: {}
@@ -705,7 +705,7 @@ volumes:
 - Run the full stack from a clean state and execute the checklist below; fix anything
   broken (typical suspects: Chroma image tag/heartbeat path, pnpm lockfile missing on
   first build — run `pnpm install` locally once to generate lockfiles before building).
-- Write the real README: what Hintora is (2 sentences), architecture table, exact run
+- Write the real README: what Hint is (2 sentences), architecture table, exact run
   commands, ports, env vars, and current status (Phase 0 complete).
 
 **Deviation (build fix)**: `corepack` on `node:20-alpine` resolved pnpm 11, which needs
@@ -717,7 +717,7 @@ files so `node_modules` is not sent as build context.
 
 ```markdown
 # README.md (skeleton)
-# Hintora POC
+# Hint POC
 Browser-first AI guidance layer: embeddable widget + FastAPI RAG backend.
 
 ## Quick start
@@ -732,7 +732,7 @@ docker compose up --build
 | Demo page  | http://localhost:3002                    |
 
 ## Status
-Phase 0 (scaffold & infrastructure) — see plans/hintora_poc_implementation.md
+Phase 0 (scaffold & infrastructure) — see plans/hint_poc_implementation.md
 ```
 
 ```bash
@@ -761,7 +761,7 @@ docker compose down && docker compose up -d   # data survives (named volumes)
 
 ```markdown
 # docs/01-architecture-overview.md (skeleton)
-# Hintora — Architecture Overview
+# Hint — Architecture Overview
 > Status: Phase 0. Docs 02–05 are added in later phases.
 
 ## Components
@@ -782,9 +782,9 @@ docker compose down && docker compose up -d   # data survives (named volumes)
 | ...             |                  |             |
 
 ## Embed contract (Phase 0)
-<script src=".../embed/v1/loader.js" data-hintora-company-id="..." [data-hintora-api-url="..."] defer>
+<script src=".../embed/v1/loader.js" data-hint-company-id="..." [data-hint-api-url="..."] defer>
 - Singleton: second tag on the same page is a no-op (console warning)
-- Mounts #hintora-root with an open Shadow DOM; placeholder badge until Phase 4
+- Mounts #hint-root with an open Shadow DOM; placeholder badge until Phase 4
 ```
 
 ---
@@ -804,7 +804,7 @@ docker compose down && docker compose up -d   # data survives (named volumes)
   in exotic ways) → loader logs an error and aborts instead of throwing.
 - **Widget script tag before `</body>` vs in `<head>`** → `lib.tsx` waits for
   `DOMContentLoaded` when the document is still loading, so both placements work.
-- **Duplicate loader tags** → `window.__HINTORA__` guard: second tag warns and no-ops
+- **Duplicate loader tags** → `window.__HINT__` guard: second tag warns and no-ops
   (demo page includes a duplicate tag to keep this permanently tested).
 - **Host page has max z-index elements** → host node uses `z-index: 2147483647` +
   `position: fixed`; Shadow DOM prevents style bleed in both directions.
@@ -822,7 +822,7 @@ docker compose down && docker compose up -d   # data survives (named volumes)
 - [x] `localhost:3001` shows admin shell; API status badge reads "ok" ✅ Step 10
 - [x] `curl -I localhost:1337/embed/v1/loader.js` → 200, `Cache-Control: no-cache`,
       `Access-Control-Allow-Origin: *` ✅ Step 10
-- [x] `localhost:3002` shows demo page with exactly **one** Hintora badge (bottom-right) ✅ Step 10
+- [x] `localhost:3002` shows demo page with exactly **one** Hint badge (bottom-right) ✅ Step 10
 - [x] Browser console on demo page: warning about the duplicate tag, no errors ✅ Step 10
       (only harmless `favicon.ico` 404)
 - [x] Badge survives host-page CSS (Shadow DOM): demo `<style>` rules don't affect it ✅ Step 10

@@ -1,4 +1,4 @@
-# Hintora — Backend (Knowledge Base API)
+# Hint — Backend (Knowledge Base API)
 
 > **Status: Phase 1 (knowledge base backend) complete.**
 > Covers companies CRUD, document ingestion (parse → chunk → embed → Chroma), and the

@@ -1,4 +1,4 @@
-# Hintora POC
+# Hint POC
 
 Browser-first AI guidance layer for SaaS apps: an embeddable Shadow DOM widget plus a
 FastAPI RAG backend. Companies upload product docs; end users get chat answers and hover
@@ -12,7 +12,7 @@ hints grounded in that knowledge and the live page context.
 | `mongo` | mongo:7 | — (internal) | companies, documents metadata |
 | `chromadb` | chromadb/chroma:0.5.23 | — (internal) | per-company vector collections |
 | `admin` | React + Vite → nginx | 3001 | company + KB management (Phase 2+) |
-| `widget-cdn` | Vite IIFE → nginx | 1337 | `loader.js` + `hintora-widget.js` |
+| `widget-cdn` | Vite IIFE → nginx | 1337 | `loader.js` + `hint-widget.js` |
 | `demo` | static nginx | 3002 | fake SaaS host with embed snippet |
 
 Traffic: Admin / Demo / Widget (browser) → Backend (:8000). Mongo and Chroma stay on the
@@ -78,7 +78,7 @@ variables below are the ones you normally set on the host.
 | `LLM_MODEL` | `gpt-4o-mini` | backend | Chat / hint model |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | backend | Document embeddings |
 | `MONGODB_URL` | set by compose | backend | Override only for local (non-Docker) runs |
-| `MONGODB_DB_NAME` | `hintora` (compose) | backend | Database name |
+| `MONGODB_DB_NAME` | `hint` (compose) | backend | Database name |
 | `CHROMA_HOST` / `CHROMA_PORT` | set by compose | backend | Override only for local runs |
 | `VITE_API_URL` | `http://localhost:8000` | admin (build arg) | Admin → backend URL |
 | `VITE_WIDGET_CDN_URL` | `http://localhost:1337` | admin (build arg) | Embed snippet CDN base |
@@ -96,14 +96,14 @@ cd admin  && pnpm install && pnpm dev
 
 ```html
 <script src="http://localhost:1337/embed/v1/loader.js"
-        data-hintora-company-id="cmp_demo0001"
-        data-hintora-api-url="http://localhost:8000"
+        data-hint-company-id="cmp_demo0001"
+        data-hint-api-url="http://localhost:8000"
         defer></script>
 ```
 
 - Singleton: a second tag on the same page is a no-op (console warning). The demo page
   includes a duplicate on purpose.
-- Mounts `#hintora-root` with an open Shadow DOM and a placeholder badge until Phase 4.
+- Mounts `#hint-root` with an open Shadow DOM and a placeholder badge until Phase 4.
 
 ## Status
 
@@ -111,7 +111,7 @@ cd admin  && pnpm install && pnpm dev
 (parse → chunk → embed → per-company Chroma collections), and the `/retrieve` debug
 endpoint are live and curl-testable.
 
-See `plans/hintora_poc_implementation.md` (master),
+See `plans/hint_poc_implementation.md` (master),
 `plans/phase_1_knowledge_base_backend.md` (this phase), and the architecture docs:
 `docs/01-architecture-overview.md` (stack) and `docs/02-backend.md` (backend API,
 ingestion pipeline, data layout).

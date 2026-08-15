@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     mongo.close()
 
 
-app = FastAPI(title="Hintora Backend", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Hint Backend", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,

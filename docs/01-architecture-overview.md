@@ -1,12 +1,12 @@
-# Hintora — Architecture Overview
+# Hint — Architecture Overview
 
 > **Status: Phase 1 (knowledge base backend) complete.**
 > Backend API contracts, ingestion pipeline, and data layout are documented in
 > [`02-backend.md`](02-backend.md). Remaining docs — `03-widget.md`, `04-admin.md`,
 > `05-api-contracts.md` — are added in later phases per
-> `plans/hintora_poc_implementation.md`.
+> `plans/hint_poc_implementation.md`.
 
-Hintora is a browser-first AI guidance layer for SaaS web apps: an embeddable React
+Hint is a browser-first AI guidance layer for SaaS web apps: an embeddable React
 widget (chat + hover hints, arriving in Phases 3–5) backed by a FastAPI RAG backend.
 A SaaS company uploads its product docs through an admin panel, then adds a single
 `<script>` tag to its app; the widget answers "how do I …?" questions grounded in
@@ -20,10 +20,10 @@ those docs plus the current page context.
 | `mongo`      | `mongo:7`                         | —           | `companies`, `documents` metadata                         |
 | `chromadb`   | `chromadb/chroma:0.5.23`          | —           | Per-company vector collections `kb_{company_id}`          |
 | `admin`      | React 18 + Vite + TS → nginx      | 3001        | Company + knowledge-base management (shell page in Phase 0) |
-| `widget-cdn` | nginx (multi-stage pnpm build)    | 1337        | Serves `loader.js` + `hintora-widget.js` under `/embed/v1/` |
+| `widget-cdn` | nginx (multi-stage pnpm build)    | 1337        | Serves `loader.js` + `hint-widget.js` under `/embed/v1/` |
 | `demo`       | `nginx:alpine` (static mount)     | 3002        | Fake SaaS host page carrying the embed snippet            |
 
-All six services share one Docker network (`hintora-network`). Only `backend`, `admin`,
+All six services share one Docker network (`hint-network`). Only `backend`, `admin`,
 `widget-cdn`, and `demo` are exposed to the host. ChromaDB listens on port 8000 *inside*
 the network (same as the backend) — it is intentionally never mapped to the host, so
 there is no conflict.
@@ -42,9 +42,9 @@ Admin flow (live — API contracts in 02-backend.md):
 
 Widget (Phase 0 placeholder):
   Browser (demo page :3002)
-    └─▶ <script src="http://localhost:1337/embed/v1/loader.js" data-hintora-company-id=…>
-          └─▶ loader.js: singleton guard → window.__HINTORA__ → injects hintora-widget.js
-                └─▶ widget bundle: #hintora-root + open Shadow DOM → placeholder badge
+    └─▶ <script src="http://localhost:1337/embed/v1/loader.js" data-hint-company-id=…>
+          └─▶ loader.js: singleton guard → window.__HINT__ → injects hint-widget.js
+                └─▶ widget bundle: #hint-root + open Shadow DOM → placeholder badge
 
 Admin SPA (:3001) ──GET /health──▶ backend (:8000) ──ping──▶ MongoDB
                                                    └─ping──▶ ChromaDB
@@ -53,7 +53,7 @@ Admin SPA (:3001) ──GET /health──▶ backend (:8000) ──ping──▶
 Target end-user flow (from the master plan; built out in Phases 3–5):
 
 ```
-host page <script src=".../loader.js" data-hintora-company-id="abc"> (singleton guard)
+host page <script src=".../loader.js" data-hint-company-id="abc"> (singleton guard)
   └─▶ widget bundle → Shadow DOM mount
        ├─ chat:  POST /api/v1/chat  (SSE stream)   { company_id, messages, page_context }
        └─ hint:  POST /api/v1/hint  (JSON)         { company_id, element, page_context }
@@ -62,7 +62,7 @@ host page <script src=".../loader.js" data-hintora-company-id="abc"> (singleton 
 
 ## Compose service map
 
-Defined in `docker-compose.yml` (project name `hintora`):
+Defined in `docker-compose.yml` (project name `hint`):
 
 | Service      | Build / image                   | Host port | Depends on                            | Volumes                    |
 |--------------|---------------------------------|-----------|----------------------------------------|----------------------------|
@@ -84,8 +84,8 @@ env vars and `.env` for local non-Docker runs). Template: `.env.example`.
 
 | Variable          | Default (settings)                  | Set by compose to                    | Consumed by |
 |-------------------|-------------------------------------|--------------------------------------|-------------|
-| `MONGODB_URL`     | `mongodb://localhost:27017/hintora` | `mongodb://mongo:27017/hintora`      | backend     |
-| `MONGODB_DB_NAME` | `hintora`                           | `hintora`                            | backend     |
+| `MONGODB_URL`     | `mongodb://localhost:27017/hint` | `mongodb://mongo:27017/hint`      | backend     |
+| `MONGODB_DB_NAME` | `hint`                           | `hint`                            | backend     |
 | `CHROMA_HOST`     | `localhost`                         | `chromadb`                           | backend     |
 | `CHROMA_PORT`     | `8000`                              | `8000`                               | backend     |
 | `OPENAI_API_KEY`  | `""` — empty still allows boot      | `${OPENAI_API_KEY:-}` from `.env`    | backend — **required** for document upload and `/retrieve` (503 without it) |
@@ -104,20 +104,20 @@ Admin build-time variables (Vite, baked into the bundle via Docker build args in
 
 ```html
 <script src="http://localhost:1337/embed/v1/loader.js"
-        data-hintora-company-id="cmp_demo0001"
-        data-hintora-api-url="http://localhost:8000" defer></script>
+        data-hint-company-id="cmp_demo0001"
+        data-hint-api-url="http://localhost:8000" defer></script>
 ```
 
-- `data-hintora-company-id` — **required**; loader logs an error and aborts without it.
-- `data-hintora-api-url` — optional; defaults to `http://localhost:8000`.
-- **Singleton guard**: the loader sets `window.__HINTORA__`; a second tag on the same
+- `data-hint-company-id` — **required**; loader logs an error and aborts without it.
+- `data-hint-api-url` — optional; defaults to `http://localhost:8000`.
+- **Singleton guard**: the loader sets `window.__HINT__`; a second tag on the same
   page is a no-op with a console warning (the demo page includes a duplicate tag to keep
   this permanently tested).
-- The loader injects `hintora-widget.js`, resolved relative to its own `src`, so loader
+- The loader injects `hint-widget.js`, resolved relative to its own `src`, so loader
   and bundle always come from the same CDN path (`/embed/v1/`).
-- The bundle mounts `#hintora-root` (`position: fixed`, max z-index) with an **open
+- The bundle mounts `#hint-root` (`position: fixed`, max z-index) with an **open
   Shadow DOM** for two-way style isolation. In Phase 0 it renders a placeholder badge
-  ("Hintora · {companyId}", bottom-right); Phase 4 swaps in the real widget UI only.
+  ("Hint · {companyId}", bottom-right); Phase 4 swaps in the real widget UI only.
 - CDN caching: `loader.js` is served with `Cache-Control: no-cache`; both files get
   `Access-Control-Allow-Origin: *`.
 
@@ -140,7 +140,7 @@ curl -s http://localhost:8000/health
 # → {"status":"ok","mongo":"ok","chroma":"ok"}   (503 + "degraded" if a store is down)
 
 open http://localhost:3001    # admin shell, API status badge
-open http://localhost:3002    # demo page, one Hintora badge bottom-right
+open http://localhost:3002    # demo page, one Hint badge bottom-right
 ```
 
 For the full create-company → upload → retrieve walkthrough, see

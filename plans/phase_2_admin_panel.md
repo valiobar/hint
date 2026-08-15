@@ -1,6 +1,6 @@
 # Phase 2 — Admin Panel (Detailed Implementation Plan)
 
-> Parent plan: `plans/hintora_poc_implementation.md` (Phase 2, Steps 2.1–2.2).
+> Parent plan: `plans/hint_poc_implementation.md` (Phase 2, Steps 2.1–2.2).
 > Docs reviewed: `docs/01-architecture-overview.md` (compose map, env vars, embed
 > contract, admin build args), `docs/02-backend.md` (all API contracts consumed here).
 > Goal: turn the Phase 0 admin shell into a full admin panel — create companies,
@@ -28,8 +28,8 @@ feature-complete single-page admin panel:
   "uploading" row per file during the request; the response carries final
   `ready` / `failed` statuses (with error reason) which replace the placeholder rows.
 - **Embed snippet**: built from `VITE_WIDGET_CDN_URL` + `VITE_API_URL` using the
-  documented contract — `{CDN}/embed/v1/loader.js`, `data-hintora-company-id`,
-  `data-hintora-api-url` — with a one-click copy block.
+  documented contract — `{CDN}/embed/v1/loader.js`, `data-hint-company-id`,
+  `data-hint-api-url` — with a one-click copy block.
 
 Code style follows the existing admin shell: tabs, single quotes, semicolons,
 CSS modules, kebab-case filenames, named exports, `handle*` event handlers,
@@ -877,8 +877,8 @@ export const FileDropzone = () => {
 **Changes**:
 - Delete button with a `window.confirm` guard → `store.deleteDocument`.
 - Snippet built exactly per the embed contract in `docs/01-architecture-overview.md`
-  (loader path `/embed/v1/loader.js`, required `data-hintora-company-id`, explicit
-  `data-hintora-api-url` since the POC API is not on the default port for customers),
+  (loader path `/embed/v1/loader.js`, required `data-hint-company-id`, explicit
+  `data-hint-api-url` since the POC API is not on the default port for customers),
   rendered in the shared `CopyBlock`.
 
 **Pseudo-code**:
@@ -923,8 +923,8 @@ import { API_URL, WIDGET_CDN_URL } from '@/shared/config';
 export const buildEmbedSnippet = (companyId: string): string =>
 	[
 		`<script src="${WIDGET_CDN_URL}/embed/v1/loader.js"`,
-		`        data-hintora-company-id="${companyId}"`,
-		`        data-hintora-api-url="${API_URL}" defer></script>`,
+		`        data-hint-company-id="${companyId}"`,
+		`        data-hint-api-url="${API_URL}" defer></script>`,
 	].join('\n');
 ```
 
@@ -941,7 +941,7 @@ interface EmbedSnippetProps {
 export const EmbedSnippet = ({ companyId }: EmbedSnippetProps) => (
 	<section className={styles.section} data-testid="embed-snippet">
 		<h3>Embed snippet</h3>
-		<p>Add this tag to the customer app to activate Hintora:</p>
+		<p>Add this tag to the customer app to activate Hint:</p>
 		<CopyBlock text={buildEmbedSnippet(companyId)} />
 	</section>
 );
@@ -1154,7 +1154,7 @@ export const App = () => {
 	return (
 		<div className={styles.layout}>
 			<header className={styles.header}>
-				<h1>Hintora Admin</h1>
+				<h1>Hint Admin</h1>
 				<ApiStatusBadge />
 			</header>
 			<div className={styles.panes}>
@@ -1242,7 +1242,7 @@ curl -s "localhost:8000/api/v1/companies/{cmp_id}/documents"
 ### Step 12: Update Documentation (MANDATORY)
 
 **File(s)**: `docs/04-admin.md` (new), `docs/01-architecture-overview.md`, `README.md`,
-`plans/hintora_poc_implementation.md`
+`plans/hint_poc_implementation.md`
 
 **Changes**:
 - Create `docs/04-admin.md`: FSD layer map for the admin app, store shape and action
@@ -1254,14 +1254,14 @@ curl -s "localhost:8000/api/v1/companies/{cmp_id}/documents"
   section (admin SPA now drives the admin flow), link to `04-admin.md`.
 - Update `README.md`: admin walkthrough replaces the curl-only instructions as the
   primary flow (curl stays as the debug path).
-- Update `plans/hintora_poc_implementation.md`: mark Phase 2 steps 2.1–2.2 with ✅,
+- Update `plans/hint_poc_implementation.md`: mark Phase 2 steps 2.1–2.2 with ✅,
   check off the `admin/` entry in "Files to Modify".
 
 **Pseudo-code**:
 
 ```markdown
 # docs/04-admin.md (skeleton)
-# Hintora — Admin Panel
+# Hint — Admin Panel
 
 > Status: Phase 2 complete. React 18 + Vite + TS, strict FSD, Zustand, Zod.
 
@@ -1354,7 +1354,7 @@ red status pill + reason; oversized/unsupported files → local pre-validation)
 - [ ] Delete: `admin/src/app.tsx`, `admin/src/app.module.css`, `admin/src/config.ts`
 - [ ] `docs/04-admin.md` (new)
 - [ ] `docs/01-architecture-overview.md`, `README.md` (Phase 2 status + walkthrough)
-- [ ] `plans/hintora_poc_implementation.md` (mark Phase 2 ✅)
+- [ ] `plans/hint_poc_implementation.md` (mark Phase 2 ✅)
 
 ## Implementation Order
 

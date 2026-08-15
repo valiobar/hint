@@ -1,8 +1,8 @@
-# Hintora POC — Browser-First AI Guidance Layer
+# Hint POC — Browser-First AI Guidance Layer
 
 ## Overview
 
-A proof of concept for **Hintora**: an embeddable AI guidance layer for SaaS web apps.
+A proof of concept for **Hint**: an embeddable AI guidance layer for SaaS web apps.
 
 A SaaS company uploads its product documentation (user manuals, help articles) through a
 simple admin panel. The documents are chunked, embedded, and stored in a vector store,
@@ -145,7 +145,7 @@ services:
     build: ./backend
     ports: ["8000:8000"]
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/hintora
+      - MONGODB_URL=mongodb://mongo:27017/hint
       - CHROMA_HOST=chromadb
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
@@ -399,7 +399,7 @@ const handleUpload = async (files: File[]) => {
 const EmbedSnippet = ({ companyId }: { companyId: string }) => {
 	const snippet =
 		`<script src="${CDN_URL}/embed/v1/loader.js" ` +
-		`data-hintora-company-id="${companyId}" defer></script>`;
+		`data-hint-company-id="${companyId}" defer></script>`;
 	return <CopyBlock text={snippet} />;
 };
 ```
@@ -498,7 +498,7 @@ async def chat(body: ChatRequest):
 
 ```python
 # prompts.py — answer system prompt (essence)
-ANSWER_SYSTEM = """You are Hintora, an in-app guide for {company_name}.
+ANSWER_SYSTEM = """You are Hint, an in-app guide for {company_name}.
 Answer ONLY from the documentation excerpts and the current page snapshot.
 The user is currently on: {url} — "{title}".
 Visible interactive elements: {interactive_summary}
@@ -550,28 +550,28 @@ hint request returns a one-liner; second identical hint request returns instantl
 
 **Changes**:
 - Mirror the marketing-player build approach: tiny `loader.js` fetched by the script tag,
-  which injects the real bundle. **Singleton**: `window.__HINTORA__` guard — a second
+  which injects the real bundle. **Singleton**: `window.__HINT__` guard — a second
   script tag on the same page is a no-op with a console warning.
-- Reads `data-hintora-company-id` and optional `data-hintora-api-url` from its own tag.
+- Reads `data-hint-company-id` and optional `data-hint-api-url` from its own tag.
 
 **Pseudo-code**:
 
 ```typescript
 // widget/public/loader.js (plain JS, no build)
 (() => {
-	if (window.__HINTORA__) {
-		console.warn('Hintora is already initialized on this page');
+	if (window.__HINT__) {
+		console.warn('Hint is already initialized on this page');
 		return;
 	}
 	const tag = document.currentScript;
-	const companyId = tag?.getAttribute('data-hintora-company-id');
+	const companyId = tag?.getAttribute('data-hint-company-id');
 	if (!companyId) {
-		console.error('Hintora: data-hintora-company-id is required');
+		console.error('Hint: data-hint-company-id is required');
 		return;
 	}
-	window.__HINTORA__ = { companyId, apiUrl: tag.getAttribute('data-hintora-api-url') };
+	window.__HINT__ = { companyId, apiUrl: tag.getAttribute('data-hint-api-url') };
 	const script = document.createElement('script');
-	script.src = new URL('hintora-widget.js', tag.src).href;
+	script.src = new URL('hint-widget.js', tag.src).href;
 	document.head.appendChild(script);
 })();
 ```
@@ -579,15 +579,15 @@ hint request returns a one-liner; second identical hint request returns instantl
 ```tsx
 // widget/src/lib.tsx — bundle entry
 const mount = () => {
-	const config = window.__HINTORA__;
+	const config = window.__HINT__;
 	if (!config || config.mounted) { return; }
 	config.mounted = true;
 	const host = document.createElement('div');
-	host.id = 'hintora-root';
+	host.id = 'hint-root';
 	document.body.appendChild(host);
 	const shadow = host.attachShadow({ mode: 'open' });
 	injectStyles(shadow);                       // compiled CSS as string
-	createRoot(shadow).render(<HintoraApp companyId={config.companyId} />);
+	createRoot(shadow).render(<HintApp companyId={config.companyId} />);
 };
 mount();
 ```
@@ -604,7 +604,7 @@ mount();
 **Pseudo-code**:
 
 ```typescript
-interface HintoraState {
+interface HintState {
 	isOpen: boolean;
 	isHintModeEnabled: boolean;
 	messages: ChatMessage[];
@@ -646,8 +646,8 @@ const sendMessage = async (text: string) => {
 **Pseudo-code**:
 
 ```tsx
-const HintoraApp = ({ companyId }: HintoraAppProps) => {
-	const isOpen = useHintoraStore((s) => s.isOpen);
+const HintApp = ({ companyId }: HintAppProps) => {
+	const isOpen = useHintStore((s) => s.isOpen);
 	return (
 		<>
 			<GuideBar />                          {/* edge-docked: logo, hints toggle, open chat */}
@@ -680,7 +680,7 @@ grounded answers about the uploaded manual, second script tag is ignored.
 - `extractPageContext()`: url, title, h1–h3, visible main-content text (truncated),
   up to ~40 visible interactive elements (`button, a, input, select, [role=button], [role=menuitem], [onclick]`)
 - `describeElement(el)`: tag, trimmed text, role, whitelisted attrs, short CSS path
-- Skip Hintora's own shadow host; skip invisible elements (`offsetParent === null` /
+- Skip Hint's own shadow host; skip invisible elements (`offsetParent === null` /
   zero rect)
 
 **Pseudo-code**:
@@ -692,7 +692,7 @@ const INTERACTIVE_SELECTOR =
 const extractPageContext = (): PageContext => {
 	const interactive = [...document.querySelectorAll(INTERACTIVE_SELECTOR)]
 		.filter(isVisible)
-		.filter((el) => !el.closest('#hintora-root'))
+		.filter((el) => !el.closest('#hint-root'))
 		.slice(0, 40)
 		.map(describeElement);
 	return {
@@ -734,7 +734,7 @@ const createHintEngine = (deps: HintEngineDeps) => {
 
 	const handleMouseOver = (event: MouseEvent) => {
 		const target = (event.target as Element).closest(INTERACTIVE_SELECTOR);
-		if (!target || target.closest('#hintora-root')) { return; }
+		if (!target || target.closest('#hint-root')) { return; }
 		dwellTimer = window.setTimeout(() => showHintFor(target), 400);
 	};
 
@@ -777,12 +777,12 @@ const createHintEngine = (deps: HintEngineDeps) => {
 
 ```tsx
 const HintTooltip = () => {
-	const activeHint = useHintoraStore((s) => s.activeHint);   // { rect, text | null }
+	const activeHint = useHintStore((s) => s.activeHint);   // { rect, text | null }
 	if (!activeHint) { return null; }
 	const position = computePlacement(activeHint.rect);        // above, flip below near top edge
 	return (
 		<div className={styles.tooltip} style={{ '--x': `${position.x}px`, '--y': `${position.y}px` } as CSSProperties}
-			role="tooltip" data-testid="hintora-hint-tooltip">
+			role="tooltip" data-testid="hint-tooltip">
 			{activeHint.text ?? <Shimmer />}
 		</div>
 	);
@@ -816,11 +816,11 @@ const HintTooltip = () => {
     <form> … invoice creation form … </form>
   </main>
   <script src="http://localhost:1337/embed/v1/loader.js"
-          data-hintora-company-id="cmp_demo0001"
-          data-hintora-api-url="http://localhost:8000" defer></script>
+          data-hint-company-id="cmp_demo0001"
+          data-hint-api-url="http://localhost:8000" defer></script>
   <!-- duplicate on purpose: must be a no-op -->
   <script src="http://localhost:1337/embed/v1/loader.js"
-          data-hintora-company-id="cmp_other" defer></script>
+          data-hint-company-id="cmp_other" defer></script>
 </body>
 ```
 

@@ -61,7 +61,7 @@ const ApiStatusBadge = () => {
 
 export const App = () => (
 	<main className={styles.shell}>
-		<h1>Hintora Admin</h1>
+		<h1>Hint Admin</h1>
 		<p>Company &amp; knowledge-base management arrives in Phase 2.</p>
 		<ApiStatusBadge />
 	</main>

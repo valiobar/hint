@@ -9,9 +9,9 @@ export default defineConfig({
 	build: {
 		lib: {
 			entry: 'src/lib.tsx',
-			name: 'HintoraWidget',
+			name: 'HintWidget',
 			formats: ['iife'],
-			fileName: () => 'hintora-widget.js',
+			fileName: () => 'hint-widget.js',
 		},
 		rollupOptions: {
 			external: [],
