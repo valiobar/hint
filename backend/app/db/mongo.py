@@ -30,3 +30,4 @@ async def ensure_indexes() -> None:
     await db["companies"].create_index("company_id", unique=True)
     await db["documents"].create_index("document_id", unique=True)
     await db["documents"].create_index("company_id")
+    await db["users"].create_index("email", unique=True)

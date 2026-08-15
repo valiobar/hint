@@ -1,0 +1,30 @@
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+}
+
+.dot {
+	width: 0.55rem;
+	height: 0.55rem;
+	border-radius: 50%;
+	background: #9ca3af;
+}
+
+.loading {
+	background: #9ca3af;
+}
+
+.ok {
+	background: var(--color-ok);
+}
+
+.degraded {
+	background: var(--color-warn);
+}
+
+.error {
+	background: var(--color-error);
+}

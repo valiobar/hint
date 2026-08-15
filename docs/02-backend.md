@@ -1,9 +1,11 @@
 # Hint — Backend (Knowledge Base API)
 
-> **Status: Phase 1 (knowledge base backend) complete.**
-> Covers companies CRUD, document ingestion (parse → chunk → embed → Chroma), and the
-> retrieval debug endpoint. Chat / hints (LangGraph, `ai/`) arrive in Phase 3.
-> See `docs/01-architecture-overview.md` for the compose stack and environment variables.
+> **Status: Phase 2 (admin panel + preset-admin auth) complete.**
+> Covers JWT auth, companies CRUD, document ingestion (parse → chunk → embed → Chroma),
+> and the retrieval debug endpoint. Chat / hints (LangGraph, `ai/`) arrive in Phase 3.
+> Auth contract (seeding, token TTL, protected vs public): [`05-auth.md`](05-auth.md).
+> Admin SPA: [`04-admin.md`](04-admin.md). Stack/env:
+> [`01-architecture-overview.md`](01-architecture-overview.md).
 
 ## Layering
 
@@ -11,13 +13,15 @@
 repositories never contain business rules:
 
 ```
-routes/        companies.py · documents.py · retrieve.py · deps.py (Depends factories + guards)
-  └─▶ services/        company_service.py · ingestion_service.py · retrieval_service.py · text_extraction.py
-        └─▶ repositories/  company_repo.py · document_repo.py · vector_repo.py (Chroma adapter)
-              └─▶ models/     company.py · document.py · retrieval.py (Pydantic)
+routes/        auth.py · companies.py · documents.py · retrieve.py · deps.py
+  └─▶ services/        auth_service.py · company_service.py · ingestion_service.py
+                       · retrieval_service.py · text_extraction.py
+        └─▶ repositories/  user_repo.py · company_repo.py · document_repo.py
+                           · vector_repo.py (Chroma adapter)
+              └─▶ models/     user.py · company.py · document.py · retrieval.py
 db/            mongo.py (Motor client, ensure_indexes) · chroma.py (HttpClient)
 config.py      Settings (BaseSettings) · get_settings() cached accessor
-main.py        lifespan (connect + ensure_indexes) · CORS · /health · router registration
+main.py        lifespan (connect + indexes + seed admin) · CORS · /health · routers
 ```
 
 Cross-cutting rules:
@@ -25,15 +29,56 @@ Cross-cutting rules:
 - Every endpoint declares a `response_model`; all I/O is `async`.
 - Chroma's Python client is synchronous — **every** Chroma call goes through
   `run_in_threadpool` inside `VectorRepository`; no other layer touches the Chroma client.
-- `routes/deps.py` centralizes dependency wiring plus two guards:
+- `routes/deps.py` centralizes dependency wiring plus three guards:
+  - `require_admin` — 401 unless `Authorization: Bearer` decodes to a `users` row.
+    Applied at router level on companies + documents. Full contract: [`05-auth.md`](05-auth.md).
   - `require_company` — 404 `"Unknown company_id"` before any company-scoped work.
   - `require_openai_key` — 503 with an actionable message when `OPENAI_API_KEY` is empty
     (the stack boots without it; only ingestion/retrieval need it).
 
+## Authentication
+
+Preset admin user, seeded at startup from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (bcrypt,
+idempotent upsert). Login returns a JWT (HS256, default 12 h). Companies and
+documents routers require it; `POST /api/v1/retrieve` and `GET /health` do not.
+
+If `ADMIN_PASSWORD` is empty, seeding is skipped and every login is 401 (fail-closed).
+
+### POST /api/v1/auth/login → 200 (public)
+
+```json
+// Request
+{"email": "admin@hint.local", "password": "your-password"}
+
+// Response 200
+{"access_token": "eyJ…", "token_type": "bearer", "expires_in": 43200, "email": "admin@hint.local"}
+```
+
+Errors: `401` `{"detail": "Invalid email or password"}` (unknown email and wrong
+password share this body) · `422` invalid body.
+
+### GET /api/v1/auth/me → 200 (bearer)
+
+```json
+{"email": "admin@hint.local", "created_at": "2026-08-15T12:00:00Z"}
+```
+
+Errors: `401` `Missing bearer token` · `Invalid or expired token - sign in again` ·
+`Unknown user`. All 401s from `require_admin` include `WWW-Authenticate: Bearer`.
+
+Send the token on every admin call:
+
+```
+Authorization: Bearer <access_token>
+```
+
+Seeding, TTL, rotation, and the public-`/retrieve` trade-off:
+[`05-auth.md`](05-auth.md).
+
 ## API contracts
 
-All routes are mounted under `/api/v1`. The API is unauthenticated in the POC
-(hardening is a Phase 6 concern).
+All routes are mounted under `/api/v1`. Companies and documents require a bearer
+token (Phase 2). `/auth/login`, `/retrieve`, and `/health` are public.
 
 ### POST /api/v1/companies → 201
 
@@ -47,15 +92,16 @@ Create a company. `company_id` is a generated slug (`cmp_` + 8 hex chars).
 {"company_id": "cmp_1a2b3c4d", "name": "Acme Corp", "created_at": "2026-08-08T12:00:00Z"}
 ```
 
-Errors: `422` invalid body (empty or >100-char name).
+Errors: `401` missing/invalid token · `422` invalid body (empty or >100-char name).
 
 ### GET /api/v1/companies → 200
 
 List all companies, newest first. Response: `[Company]` (same shape as above).
+Errors: `401` missing/invalid token.
 
 ### GET /api/v1/companies/{company_id} → 200
 
-Fetch one company. Errors: `404` `{"detail": "Unknown company_id"}`.
+Fetch one company. Errors: `401` missing/invalid token · `404` `{"detail": "Unknown company_id"}`.
 
 ### POST /api/v1/companies/{company_id}/documents → 201
 
@@ -90,19 +136,19 @@ bad file never fails the batch.
 ]
 ```
 
-Errors: `404` unknown company · `413` file > 10 MB (checked before any processing) ·
-`422` no files · `503` `OPENAI_API_KEY` not configured.
+Errors: `401` missing/invalid token · `404` unknown company · `413` file > 10 MB
+(checked before any processing) · `422` no files · `503` `OPENAI_API_KEY` not configured.
 
 ### GET /api/v1/companies/{company_id}/documents → 200
 
 List a company's documents, newest first. Response: `[DocumentMeta]`.
-Errors: `404` unknown company.
+Errors: `401` missing/invalid token · `404` unknown company.
 
 ### DELETE /api/v1/companies/{company_id}/documents/{document_id} → 204
 
 Delete a document: Chroma chunks are removed first (metadata filter on `document_id`),
-then the Mongo record. Errors: `404` unknown company or unknown/cross-company
-`document_id`.
+then the Mongo record. Errors: `401` missing/invalid token · `404` unknown company
+or unknown/cross-company `document_id`.
 
 ### POST /api/v1/retrieve → 200
 
@@ -154,7 +200,7 @@ Pings Mongo and Chroma. `{"status":"ok","mongo":"ok","chroma":"ok"}`, or 503 wit
    - Chunk metadata: `{"document_id": …, "filename": …, "chunk_index": …}`.
 6. **Finalize** — `status: "ready"` + `chunk_count` on success; any failure marks the
    record `status: "failed"` with the error reason (truncated to 500 chars) — the
-   record survives so the admin UI (Phase 2) can display it.
+   record survives so the admin UI can display it.
 
 ### Document status lifecycle
 
@@ -174,6 +220,7 @@ delete the failed record.
 |-------------|-----------------------------------------------------------------------|---------|
 | `companies` | `{company_id, name, created_at}`                                      | `company_id` **unique** |
 | `documents` | `{document_id, company_id, filename, size_bytes, chunk_count, status, error, created_at}` | `document_id` **unique** · `company_id` |
+| `users`     | `{email, password_hash, created_at}`                                  | `email` **unique** |
 
 ### ChromaDB
 
@@ -189,27 +236,42 @@ company's chunks.
 
 ## End-to-end curl walkthrough
 
-Prerequisite: `OPENAI_API_KEY` set in `.env`, stack up.
+Prerequisite: `OPENAI_API_KEY` **and** `ADMIN_PASSWORD` set in `.env`, stack up.
+The browser path (login → create → upload → copy snippet) is in the README and
+[`04-admin.md`](04-admin.md); this is the debug path.
 
 ```bash
 docker compose up --build -d
 curl -s localhost:8000/health
 # → {"status":"ok","mongo":"ok","chroma":"ok"}
 
+# 0. obtain a token (use the ADMIN_EMAIL / ADMIN_PASSWORD from .env)
+TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@hint.local","password":"YOUR_ADMIN_PASSWORD"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
+# unauthenticated admin call
+curl -s localhost:8000/api/v1/companies
+# → {"detail":"Missing bearer token"}   (401)
+
 # 1. create a company
 curl -s -X POST localhost:8000/api/v1/companies \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"name": "Acme Corp"}'
 # → {"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"…"}
 
 # 2. upload documents (multi-file; use the company_id from step 1)
 curl -s -X POST "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
+  -H "Authorization: Bearer $TOKEN" \
   -F "files=@user-manual.pdf" -F "files=@faq.md"
 # → [{"document_id":"doc_…","status":"ready","chunk_count":42,…}, {…}]
 
 # 3. list documents — both "ready"
-curl -s "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents"
+curl -s "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
+  -H "Authorization: Bearer $TOKEN"
 
-# 4. retrieve relevant chunks
+# 4. retrieve relevant chunks — public, no token (widget path)
 curl -s -X POST localhost:8000/api/v1/retrieve \
   -H 'Content-Type: application/json' \
   -d '{"company_id": "cmp_1a2b3c4d", "query": "how do I export a report?", "k": 3}'
@@ -217,8 +279,12 @@ curl -s -X POST localhost:8000/api/v1/retrieve \
 
 # 5. negative paths
 curl -s -o /dev/null -w '%{http_code}' \
+  "localhost:8000/api/v1/companies/cmp_nope/documents"                      # 401 (no token)
+curl -s -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $TOKEN" \
   "localhost:8000/api/v1/companies/cmp_nope/documents"                      # 404
 curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+  -H "Authorization: Bearer $TOKEN" \
   "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents/doc_xxx"          # 204 (real id) / 404
 # after a 204, /retrieve no longer returns chunks from the deleted document
 ```
@@ -227,6 +293,9 @@ curl -s -o /dev/null -w '%{http_code}' -X DELETE \
 
 | Symptom | Cause | Behavior / fix |
 |---|---|---|
+| `401 {"detail":"Missing bearer token"}` on companies/documents | No `Authorization` header | `POST /api/v1/auth/login` first; pass `Authorization: Bearer $TOKEN` |
+| `401 {"detail":"Invalid email or password"}` | Wrong creds, or `ADMIN_PASSWORD` unset so seeding was skipped | Set `ADMIN_PASSWORD` in `.env`, restart backend, use that password |
+| `401 {"detail":"Invalid or expired token - sign in again"}` | Expired / tampered JWT, or `JWT_SECRET` changed | Login again |
 | `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` on upload/retrieve | Empty `OPENAI_API_KEY` | Stack boots fine (Phase 0 behavior preserved); set the key in `.env`, `docker compose up -d` |
 | Upload returns `status: "failed"`, error "No extractable text (scanned PDF or empty file)" | Scanned/image-only PDF, or empty file | Expected — no OCR in the POC; response is still 201 with per-file status |
 | Upload returns `status: "failed"`, error "Unsupported file type: .png" | Extension outside pdf/md/txt/html/htm | Batch continues; other files unaffected |

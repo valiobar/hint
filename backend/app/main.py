@@ -1,14 +1,18 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.db import chroma, mongo
+from app.repositories.user_repo import UserRepository
+from app.routes.auth import router as auth_router
 from app.routes.companies import router as companies_router
+from app.routes.deps import require_admin
 from app.routes.documents import router as documents_router
 from app.routes.retrieve import router as retrieve_router
+from app.services.auth_service import AuthService
 
 
 @asynccontextmanager
@@ -16,6 +20,9 @@ async def lifespan(app: FastAPI):
     mongo.connect()
     chroma.connect()
     await mongo.ensure_indexes()
+    await AuthService(
+        UserRepository(mongo.get_db()), get_settings()
+    ).ensure_admin_user()
     yield
     mongo.close()
 
@@ -27,8 +34,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(companies_router, prefix="/api/v1")
-app.include_router(documents_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(
+    companies_router, prefix="/api/v1", dependencies=[Depends(require_admin)]
+)
+app.include_router(
+    documents_router, prefix="/api/v1", dependencies=[Depends(require_admin)]
+)
 app.include_router(retrieve_router, prefix="/api/v1")
 
 

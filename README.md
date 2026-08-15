@@ -8,21 +8,25 @@ hints grounded in that knowledge and the live page context.
 
 | Service | Tech | Host port | Purpose |
 |---|---|---|---|
-| `backend` | FastAPI (Python 3.12) | 8000 | Companies, document ingestion, retrieval (`docs/02-backend.md`); chat in Phase 3 |
-| `mongo` | mongo:7 | — (internal) | companies, documents metadata |
+| `backend` | FastAPI (Python 3.12) | 8000 | Auth, companies, document ingestion, retrieval (`docs/02-backend.md`, `docs/05-auth.md`); chat in Phase 3 |
+| `mongo` | mongo:7 | — (internal) | companies, documents, users |
 | `chromadb` | chromadb/chroma:0.5.23 | — (internal) | per-company vector collections |
-| `admin` | React + Vite → nginx | 3001 | company + KB management (Phase 2+) |
+| `admin` | React + Vite → nginx | 3001 | company + KB management (`docs/04-admin.md`) |
 | `widget-cdn` | Vite IIFE → nginx | 1337 | `loader.js` + `hint-widget.js` |
 | `demo` | static nginx | 3002 | fake SaaS host with embed snippet |
 
 Traffic: Admin / Demo / Widget (browser) → Backend (:8000). Mongo and Chroma stay on the
 compose network only. Chroma listens on 8000 inside the network (same as backend) but is
-never published to the host.
+never published to the host. Admin companies/documents calls send a JWT; `/retrieve` and
+`/health` stay public so the embed works without credentials.
 
 ## Quick start
 
 ```bash
-cp .env.example .env        # set OPENAI_API_KEY — required for upload/retrieve
+cp .env.example .env
+# Required before first boot:
+#   ADMIN_PASSWORD   — preset admin login (empty disables login entirely)
+#   OPENAI_API_KEY   — document upload and /retrieve (503 without it)
 docker compose up --build
 ```
 
@@ -40,27 +44,49 @@ docker compose down
 docker compose up -d
 ```
 
-## End-to-end example: create company → upload docs → retrieve
+## Admin walkthrough (primary)
 
-With the stack up and `OPENAI_API_KEY` set in `.env`
-(full API contracts in `docs/02-backend.md`):
+With `ADMIN_PASSWORD` and `OPENAI_API_KEY` set, stack up:
+
+1. Open http://localhost:3001 — login screen.
+2. Sign in with `ADMIN_EMAIL` (default `admin@hint.local`) and the `ADMIN_PASSWORD`
+   from `.env`.
+3. Create a company (name, 1–100 characters). It appears in the sidebar and is
+   auto-selected.
+4. Drop or browse product docs (`.pdf`, `.md`, `.txt`, `.html`, ≤ 10 MB). Rows go
+   `uploading` → `ready` (or `failed` with a reason — e.g. a scanned PDF).
+5. Copy the embed snippet from the company detail pane and paste it into a host page.
+
+Reload stays signed in (token in `localStorage`). Sign out clears it. A 401
+(expired/tampered token) returns you to the login screen instead of an error wall.
+
+Full FSD map, store actions, and failure modes: `docs/04-admin.md`.
+Auth contract (seeding, JWT, rotation): `docs/05-auth.md`.
+
+## Debug path: curl
+
+Same flow over HTTP. Obtain a token first — companies/documents return 401 without it.
+`POST /api/v1/retrieve` stays public (widget path). Full contracts:
+`docs/02-backend.md`.
 
 ```bash
-# 1. create a company (note the returned company_id)
+TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@hint.local","password":"YOUR_ADMIN_PASSWORD"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
 curl -s -X POST localhost:8000/api/v1/companies \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"name": "Acme Corp"}'
 # → {"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"…"}
 
-# 2. upload documents (pdf / md / txt / html, ≤ 10 MB each)
 curl -s -X POST "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
+  -H "Authorization: Bearer $TOKEN" \
   -F "files=@user-manual.pdf" -F "files=@faq.md"
-# → per-file status: [{"document_id":"doc_…","status":"ready","chunk_count":42,…}, …]
 
-# 3. retrieve relevant chunks (RAG debug endpoint; Phase 3 chat reuses this service)
 curl -s -X POST localhost:8000/api/v1/retrieve \
   -H 'Content-Type: application/json' \
   -d '{"company_id": "cmp_1a2b3c4d", "query": "how do I export a report?", "k": 3}'
-# → {"chunks":[{"text":"…export…","filename":"user-manual.pdf","score":0.31}, …]}
 ```
 
 Without `OPENAI_API_KEY`, the stack still boots but upload and `/retrieve` return
@@ -74,6 +100,10 @@ variables below are the ones you normally set on the host.
 
 | Variable | Default | Consumed by | Notes |
 |---|---|---|---|
+| `ADMIN_PASSWORD` | `""` | backend | **Required** for admin login; empty skips seeding and every login is 401 |
+| `ADMIN_EMAIL` | `admin@hint.local` | backend | Preset admin email (normalized to lowercase) |
+| `JWT_SECRET` | `dev-insecure-secret-change-me` | backend | Change before any shared/deployed stack |
+| `ACCESS_TOKEN_TTL_MINUTES` | `720` | backend | Access-token lifetime (no refresh token in the POC) |
 | `OPENAI_API_KEY` | `""` | backend | Required for document upload and `/retrieve` (503 without it); stack boots without it |
 | `LLM_MODEL` | `gpt-4o-mini` | backend | Chat / hint model |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | backend | Document embeddings |
@@ -94,6 +124,8 @@ cd admin  && pnpm install && pnpm dev
 
 ## Embed snippet (Phase 0)
 
+The admin panel copies this with the selected `company_id` baked in:
+
 ```html
 <script src="http://localhost:1337/embed/v1/loader.js"
         data-hint-company-id="cmp_demo0001"
@@ -107,11 +139,11 @@ cd admin  && pnpm install && pnpm dev
 
 ## Status
 
-**Phase 1 (knowledge base backend) — complete.** Companies CRUD, document ingestion
-(parse → chunk → embed → per-company Chroma collections), and the `/retrieve` debug
-endpoint are live and curl-testable.
+**Phase 2 (admin panel + preset-admin auth) — complete.** Sign in, create a company,
+upload docs, copy the snippet. Companies/documents require a JWT; `/retrieve` stays
+public for the widget. Admin auth landed here instead of the Phase 6 hardening pass.
 
 See `plans/hint_poc_implementation.md` (master),
-`plans/phase_1_knowledge_base_backend.md` (this phase), and the architecture docs:
-`docs/01-architecture-overview.md` (stack) and `docs/02-backend.md` (backend API,
-ingestion pipeline, data layout).
+`plans/phase_2_admin_panel.md` (this phase), and the architecture docs:
+`docs/01-architecture-overview.md` (stack), `docs/02-backend.md` (API + ingestion),
+`docs/04-admin.md` (admin SPA), `docs/05-auth.md` (auth contract).

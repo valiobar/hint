@@ -17,6 +17,13 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["*"]  # POC: widget runs on arbitrary customer origins
 
+    jwt_secret: str = "dev-insecure-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_ttl_minutes: int = 720  # 12h; POC has no refresh-token flow
+
+    admin_email: str = "admin@hint.local"
+    admin_password: str = ""  # empty → admin seeding skipped, login always 401
+
 
 @lru_cache
 def get_settings() -> Settings:

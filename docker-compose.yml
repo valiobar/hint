@@ -29,6 +29,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-me}
+      - ACCESS_TOKEN_TTL_MINUTES=${ACCESS_TOKEN_TTL_MINUTES:-720}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@hint.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     depends_on:
       mongo:
         condition: service_healthy

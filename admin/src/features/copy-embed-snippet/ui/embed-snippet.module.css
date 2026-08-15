@@ -1,0 +1,14 @@
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.section h3,
+.section p {
+	margin: 0;
+}
+
+.section p {
+	color: var(--color-text-muted);
+}

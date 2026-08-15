@@ -1,0 +1,53 @@
+.detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-3);
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius);
+}
+
+.header {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+}
+
+.header h2,
+.detail h3 {
+	margin: 0;
+}
+
+.header code {
+	color: var(--color-text-muted);
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+}
+
+.documents {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.uploadingRow {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	padding: var(--space-2) 0;
+	border-bottom: 1px solid var(--color-border);
+	color: var(--color-text-muted);
+}
+
+.error {
+	margin: 0;
+	color: var(--color-error);
+	font-size: 0.85rem;
+}
+
+.empty {
+	margin: 0;
+	color: var(--color-text-muted);
+	font-size: 0.85rem;
+}
