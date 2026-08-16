@@ -174,6 +174,7 @@ walkthrough: {
 | `stopWalkthrough()` | `walkthrough = null`. Also bound to Escape on the host document. |
 | `sendMessage()` | Clears `walkthrough` when a new chat turn starts. |
 | `disableWidget()` | Clears `walkthrough` (unknown `company_id` 404 path). |
+| `clearMessages()` | New-chat reset — see [Chat panel UX](#chat-panel-ux-markdown-copy-new-chat). Also clears `walkthrough` (its source message is gone). |
 
 ### Layer mount
 
@@ -219,6 +220,29 @@ Try it on the demo host after `docker compose up --build`:
 open http://localhost:3002
 # ask "how do I …" in the Hint panel → Walk me through it
 ```
+
+### Chat panel UX (markdown, copy, new chat)
+
+| Action | Behavior |
+|---|---|
+| `clearMessages()` | No-op while `isStreaming`. Resets `messages`, `chatError`, `walkthrough`. Persisted `messages` clear via the existing `partialize`. Bound to the header "New chat" button (`chat-panel-new-chat`), disabled while streaming or when there is nothing to clear. |
+
+Assistant messages render through `MarkdownContent`
+(`widget/src/shared/ui/markdown/`) over `parseMarkdownBlocks`
+(`widget/src/shared/lib/markdown.ts`): paragraphs, ordered/unordered
+lists, and `inline code`, with all plain-text runs delegated to
+`renderWithElementChips` — chips keep working inside list items.
+`MarkdownContent` takes the inline renderer as a prop, so `shared/`
+never imports from `features/locate-element` (FSD boundary); the widget
+layer (`message-list.tsx`) injects the chip parser. Unmatched `**bold**`
+now renders as `<strong>`; unmatched `"quoted"` text stays literal prose
+with quotes preserved. The walkthrough parser (`parseWalkthroughSteps`)
+still consumes **raw** message content. User messages stay plain text.
+
+Completed assistant bubbles expose a copy button (copies the **raw**
+markdown, transient "Copied" state for 2 s via `useCopyToClipboard`;
+requires a secure context for `navigator.clipboard` — on plain-HTTP
+hosts the write fails silently with a dev console warning).
 
 ## Backend layering
 

@@ -84,6 +84,7 @@ interface HintState {
 	disableWidget: () => void;
 	setDockPosition: (side: DockSide, topFraction: number) => void;
 	sendMessage: (text: string) => Promise<void>;
+	clearMessages: () => void;
 	startWalkthrough: (steps: WalkthroughStep[]) => void;
 	nextWalkthroughStep: () => void;
 	prevWalkthroughStep: () => void;
@@ -174,6 +175,16 @@ export const useHintStore = create<HintState>()(
 						: s,
 				),
 			stopWalkthrough: () => set({ walkthrough: null }),
+
+			clearMessages: () => {
+				// Clearing mid-stream would orphan the in-flight assistant
+				// message: patchAssistant targets it by id and would
+				// silently no-op against an emptied list.
+				if (get().isStreaming) {
+					return;
+				}
+				set({ messages: [], chatError: null, walkthrough: null });
+			},
 
 			sendMessage: async (text) => {
 				const trimmed = text.trim();

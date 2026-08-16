@@ -6,6 +6,7 @@ import {
 	WalkthroughStartButton,
 } from '@/features/walkthrough';
 import { useHintStore } from '@/shared/store/hint-store';
+import { MarkdownContent } from '@/shared/ui/markdown';
 import styles from '@/widgets/chat-panel/ui/chat-panel.module.css';
 
 export const MessageList = () => {
@@ -68,12 +69,20 @@ export const MessageList = () => {
 								index === messages.length - 1
 							}
 							sources={message.sources}
+							copyText={
+								isCompletedAssistant
+									? message.content
+									: undefined
+							}
 						>
-							{message.role === 'assistant'
-								? renderWithElementChips(
-										message.content,
-									)
-								: message.content}
+							{message.role === 'assistant' ? (
+								<MarkdownContent
+									text={message.content}
+									renderInline={renderWithElementChips}
+								/>
+							) : (
+								message.content
+							)}
 						</MessageBubble>
 						{steps.length > 0 && (
 							<WalkthroughStartButton steps={steps} />

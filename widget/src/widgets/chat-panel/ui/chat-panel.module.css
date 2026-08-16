@@ -130,13 +130,26 @@
 	color: var(--hint-accent);
 }
 
-.header button:hover svg {
+.closeButton:hover svg {
 	transform: rotate(90deg);
 }
 
 .header button:focus-visible {
 	outline: 2px solid var(--hint-accent);
 	outline-offset: 1px;
+}
+
+.header button:disabled {
+	opacity: 0.4;
+	cursor: default;
+	background: transparent;
+	color: var(--hint-text-muted);
+}
+
+.headerActions {
+	display: flex;
+	align-items: center;
+	gap: var(--hint-space-1);
 }
 
 .empty {

@@ -4,7 +4,7 @@ import { renderWithElementChips } from '@/features/locate-element/ui/render-with
 import { makeVisible } from '@/test/setup';
 
 describe('renderWithElementChips', () => {
-	it('turns quoted and bold labels into chips and strips asterisks from unmatched bold text', () => {
+	it('turns quoted and bold labels into chips and renders unmatched bold as <strong>', () => {
 		document.body.innerHTML = `
 			<button type="button">Export report</button>
 			<label>Customer name <input type="text"></label>
@@ -25,7 +25,19 @@ describe('renderWithElementChips', () => {
 		expect(chips).toHaveLength(2);
 		expect(chips[0]).toHaveTextContent('Export report');
 		expect(chips[1]).toHaveTextContent('Customer name');
-		expect(container.textContent).toContain('Unknown thing');
+		const strong = container.querySelector('strong');
+		expect(strong).not.toBeNull();
+		expect(strong).toHaveTextContent('Unknown thing');
 		expect(container.textContent).not.toContain('**');
+	});
+
+	it('keeps unmatched quoted labels as literal text with quotes preserved', () => {
+		const { container } = render(
+			<div data-testid="msg">
+				{renderWithElementChips('Open "Nowhere Pane" first.')}
+			</div>,
+		);
+		expect(screen.queryByTestId('element-chip')).toBeNull();
+		expect(container.textContent).toBe('Open "Nowhere Pane" first.');
 	});
 });
