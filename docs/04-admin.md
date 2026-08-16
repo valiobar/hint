@@ -23,6 +23,7 @@ admin/src/
 ├── widgets/
 │   ├── companies-sidebar/           # list + create-company feature
 │   ├── company-detail/              # snippet + upload + document list
+│   ├── product-overview/            # unselected-company product + feature cards
 │   └── api-status/                  # GET /health badge (public, no token)
 ├── features/
 │   ├── login/                       # Zod schema + login form
@@ -113,8 +114,28 @@ selection is the in-memory `company_id` from the list.
    "Email is required" / "Password is required". Not a full RFC email check —
    matches the backend `LoginRequest` (`min_length=3`).
 3. Success: token + email in `localStorage`, header shows the email, companies load.
+   `selectedCompanyId` starts `null`, so the main pane is
+   `ProductOverview` (`data-testid="product-overview"`): short product
+   copy plus feature cards (how each works, how to open it in the UI).
 4. Failure: same backend string for unknown email and wrong password
    (`Invalid email or password`). Password field is cleared after the attempt.
+
+### Unselected company (product overview)
+
+When `selectedCompanyId` is `null` (fresh login or reload), `app.tsx`
+renders `widgets/product-overview` instead of `CompanyDetail`. Copy lives
+in `widgets/product-overview/lib/features.ts` — keep it aligned with the
+shipped widget/admin UI.
+
+| Card | How it is opened |
+|---|---|
+| Knowledge base | Company → Documents dropzone |
+| Embed snippet | Company → copy block |
+| Guide bar | Host page pill; Ctrl/Cmd + / |
+| Chat | Sparkle on the guide bar |
+| Element chips | Quoted labels in a completed chat answer |
+| Hover hints | Lightbulb on the guide bar, then hover a control |
+| Guided walkthroughs | **Walk me through it** under a how-to answer |
 
 ### Create → upload → snippet
 
@@ -132,8 +153,9 @@ selection is the in-memory `company_id` from the list.
 - Token + email persist (`hint.admin.token`, `hint.admin.email`).
 - `restoreSession` validates with `GET /auth/me` before the panel renders.
 - **`selectedCompanyId` is not persisted.** After reload the list is back but
-  nothing is selected — click the company again to reload documents. This matches
-  the store contract (Steps 3 / 13 / 14), not a product bug.
+  nothing is selected — the main pane shows `ProductOverview` again. Click
+  the company to reload documents. This matches the store contract
+  (Steps 3 / 13 / 14), not a product bug.
 
 ### Sign out
 

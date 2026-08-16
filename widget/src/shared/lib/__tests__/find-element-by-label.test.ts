@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findElementByLabel } from '@/features/locate-element/lib/find-element-by-label';
+import { findElementByLabel } from '@/shared/lib/find-element-by-label';
 import { makeVisible } from '@/test/setup';
 
 describe('findElementByLabel', () => {

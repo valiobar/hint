@@ -1,13 +1,21 @@
 .panel {
+	--panel-height: min(36rem, 80vh);
+
 	box-sizing: border-box;
 	position: fixed;
-	top: 50%;
-	right: calc(2.25rem + var(--hint-space-2) * 3);
-	transform: translateY(-50%);
+	/* Vertically centered on the guide bar, clamped into the viewport */
+	top: clamp(
+		var(--hint-space-3),
+		calc(
+			var(--panel-dock-fraction, 0.5) * 100vh -
+				var(--panel-height) / 2
+		),
+		calc(100vh - var(--panel-height) - var(--hint-space-3))
+	);
 	display: flex;
 	flex-direction: column;
 	inline-size: min(22rem, calc(100vw - 4.5rem));
-	block-size: min(36rem, 80vh);
+	block-size: var(--panel-height);
 	overflow: hidden;
 	background: var(--hint-surface);
 	border: 1px solid var(--hint-border);
@@ -15,35 +23,73 @@
 	box-shadow: var(--hint-shadow);
 	font-family: var(--hint-font);
 	color: var(--hint-text);
-	transform-origin: right center;
 	animation: slideIn var(--hint-duration-slow) var(--hint-ease);
+}
+
+.dockRight {
+	right: calc(2.25rem + var(--hint-space-2) * 3);
+	transform-origin: right center;
+}
+
+.dockLeft {
+	left: calc(2.25rem + var(--hint-space-2) * 3);
+	transform-origin: left center;
+	animation-name: slideInLeft;
 }
 
 .closing {
 	animation: slideOut var(--hint-duration-base) ease-in forwards;
 }
 
+.dockLeft.closing {
+	animation-name: slideOutLeft;
+}
+
 @keyframes slideIn {
 	from {
 		opacity: 0;
-		transform: translateY(-50%) translateX(0.75rem) scale(0.98);
+		transform: translateX(0.75rem) scale(0.98);
 	}
 
 	to {
 		opacity: 1;
-		transform: translateY(-50%) translateX(0) scale(1);
+		transform: translateX(0) scale(1);
 	}
 }
 
 @keyframes slideOut {
 	from {
 		opacity: 1;
-		transform: translateY(-50%) translateX(0) scale(1);
+		transform: translateX(0) scale(1);
 	}
 
 	to {
 		opacity: 0;
-		transform: translateY(-50%) translateX(0.75rem) scale(0.98);
+		transform: translateX(0.75rem) scale(0.98);
+	}
+}
+
+@keyframes slideInLeft {
+	from {
+		opacity: 0;
+		transform: translateX(-0.75rem) scale(0.98);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+}
+
+@keyframes slideOutLeft {
+	from {
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+
+	to {
+		opacity: 0;
+		transform: translateX(-0.75rem) scale(0.98);
 	}
 }
 

@@ -1,4 +1,4 @@
-import { type AnimationEvent } from 'react';
+import { type AnimationEvent, type CSSProperties } from 'react';
 import { MessageComposer } from '@/features/send-message';
 import { useHintStore } from '@/shared/store/hint-store';
 import { CloseIcon } from '@/shared/ui/icons';
@@ -13,6 +13,8 @@ interface ChatPanelProps {
 export const ChatPanel = ({ isClosing, onExitEnd }: ChatPanelProps) => {
 	const closePanel = useHintStore((s) => s.closePanel);
 	const chatError = useHintStore((s) => s.chatError);
+	const dockSide = useHintStore((s) => s.dockSide);
+	const dockTopFraction = useHintStore((s) => s.dockTopFraction);
 
 	const handleAnimationEnd = (event: AnimationEvent) => {
 		// Child animations (bubbles, typing dots) bubble up — only the
@@ -25,7 +27,14 @@ export const ChatPanel = ({ isClosing, onExitEnd }: ChatPanelProps) => {
 	return (
 		<section
 			className={
-				`${styles.panel} ${isClosing ? styles.closing : ''}`
+				`${styles.panel} ` +
+				`${dockSide === 'left' ? styles.dockLeft : styles.dockRight} ` +
+				`${isClosing ? styles.closing : ''}`
+			}
+			style={
+				{
+					'--panel-dock-fraction': dockTopFraction,
+				} as CSSProperties
 			}
 			onAnimationEnd={handleAnimationEnd}
 			role="dialog"

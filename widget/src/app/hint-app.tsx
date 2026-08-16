@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { GuideBar } from '@/widgets/guide-bar';
 import { ChatPanel } from '@/widgets/chat-panel';
 import { HintLayer } from '@/features/hover-hint';
+import { WalkthroughLayer } from '@/features/walkthrough';
 import { useHintStore } from '@/shared/store/hint-store';
 import { useExitAnimation } from '@/shared/lib/use-exit-animation';
 
@@ -40,6 +41,7 @@ export const HintApp = () => {
 				/>
 			)}
 			<HintLayer />
+			<WalkthroughLayer />
 		</>
 	);
 };

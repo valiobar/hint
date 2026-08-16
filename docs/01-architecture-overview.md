@@ -5,7 +5,9 @@
 > (LangGraph chat + hints): [`06-ai-layer.md`](06-ai-layer.md). Admin SPA:
 > [`04-admin.md`](04-admin.md). Auth contract: [`05-auth.md`](05-auth.md).
 > Remaining docs — `03-widget.md` (reserved for the Phase 4 widget) — land in
-> Phases 4–5 per `plans/hint_poc_implementation.md`.
+> Phases 4–5 per `plans/hint_poc_implementation.md`. Until that file exists,
+> widget walkthrough inventory lives in this overview
+> ([guided walkthroughs](#widget-feature-inventory--guided-walkthroughs)).
 
 Hint is a browser-first AI guidance layer for SaaS web apps: an embeddable React
 widget (UI in Phases 4–5) backed by a FastAPI RAG backend whose chat/hint APIs
@@ -48,7 +50,7 @@ Admin SPA (:3001) — see 04-admin.md / 05-auth.md:
 
 Widget path (public — no token; live as of Phase 3):
   POST /api/v1/retrieve ─────────────────────▶ backend ──▶ Chroma query (kb_{id}) → top-k chunks
-  POST /api/v1/chat     (SSE) ───────────────▶ backend ──▶ LangGraph (condense → retrieve k=5 → answer)
+  POST /api/v1/chat     (SSE) ───────────────▶ backend ──▶ LangGraph (condense → retrieve k=5 → assess page → answer)
   POST /api/v1/hint     (JSON) ──────────────▶ backend ──▶ retrieve k=3 → 1 LLM call → clamp 140 chars
                                                           └─ in-process TTL cache (sha1 key)
 
@@ -136,6 +138,87 @@ Admin build-time variables (Vite, baked into the bundle via Docker build args in
   ("Hint · {companyId}", bottom-right); Phase 4 swaps in the real widget UI only.
 - CDN caching: `loader.js` is served with `Cache-Control: no-cache`; both files get
   `Access-Control-Allow-Origin: *`.
+
+## Widget feature inventory — guided walkthroughs
+
+`03-widget.md` is still reserved/missing (pre-existing Phase 4/5 gap). This
+section is the widget-side inventory until that file exists. The prompt-level
+step-list contract the parser depends on lives in
+[`06-ai-layer.md`](06-ai-layer.md#step-list-contract-guided-walkthroughs).
+No HTTP / SSE / Pydantic change — the widget parses completed assistant
+`content` client-side.
+
+End-to-end: user asks a how-to question → `ANSWER_SYSTEM` returns a numbered
+list → `parseWalkthroughSteps` yields ≥2 steps → "Walk me through it" appears
+under that message → start closes the chat panel and highlights one host
+control at a time.
+
+### Store (`widget/src/shared/store/hint-store.ts`)
+
+`walkthrough` is **transient** — omitted from `partialize`. A reload drops
+the overlay; the source assistant message (persisted) still shows the start
+button.
+
+```
+walkthrough: {
+  steps: Array<{ instruction: string; label: string | null }>;
+  activeStepIndex: number;
+} | null
+```
+
+| Action | Behavior |
+|---|---|
+| `startWalkthrough(steps)` | Requires `steps.length >= 2` and `!isDisabled`. Sets `activeStepIndex: 0`, closes the panel (`isOpen: false`), clears `activeHint`. |
+| `nextWalkthroughStep()` | Increments index. Past the last step → `walkthrough = null` (Done / auto-advance on the last control). |
+| `prevWalkthroughStep()` | Decrements, clamped at `0`. |
+| `stopWalkthrough()` | `walkthrough = null`. Also bound to Escape on the host document. |
+| `sendMessage()` | Clears `walkthrough` when a new chat turn starts. |
+| `disableWidget()` | Clears `walkthrough` (unknown `company_id` 404 path). |
+
+### Layer mount
+
+`WalkthroughLayer` mounts next to `HintLayer` in `widget/src/app/hint-app.tsx`
+(inside the open Shadow DOM under `#hint-root`). It renders nothing when
+`walkthrough` is `null`.
+
+While a walkthrough is active:
+
+1. `useWalkthroughTarget(label, stepIndex)` resolves the current step's
+   quoted label via `findElementByLabel` (excludes `#hint-root`). Retry
+   window: every 200 ms for 2 s, so menus/dialogs that appear after the
+   previous click can still resolve.
+2. On hit: persistent host-page outline (`outlineElement`) +
+   `scrollIntoView({ block: 'center' })`.
+3. `WalkthroughCard` ("Step N of M" + instruction + Back / Next|Done /
+   Stop) is placed by `computeCardPlacement`: below the target if it fits,
+   otherwise above; `floating` (bottom-center) when there is no rect
+   (unresolved label or instruction-only step).
+4. Unresolved step copy: *"Can't find this element on the current page —
+   do the step manually, then press Next."* Back / Next / Stop stay usable.
+
+Chat entry: `widgets/chat-panel/ui/message-list.tsx` runs the parser only
+on **completed** assistant messages (not failed, not the in-flight stream
+placeholder). `WalkthroughStartButton` appears when the parser returns a
+non-empty list.
+
+### Auto-advance
+
+`WalkthroughLayer` listens for capture-phase `pointerdown` on `document`.
+If the event target is the highlighted element or a descendant (icon
+inside a button), it waits **600 ms** then calls `nextWalkthroughStep`.
+The delay lets the host UI react (open a menu) before the next resolve
+starts. The pending timer is cleared on unmount so a manual Next / Stop
+does not race.
+
+Clicks inside the widget never auto-advance: `findElementByLabel` cannot
+return a node under `#hint-root`.
+
+Try it on the demo host after `docker compose up --build`:
+
+```bash
+open http://localhost:3002
+# ask "how do I …" in the Hint panel → Walk me through it
+```
 
 ## Backend layering
 

@@ -13,7 +13,7 @@ Phase 3 adds two public endpoints under `/api/v1`:
 
 | Endpoint | Transport | Pipeline | Typical latency |
 |---|---|---|---|
-| `POST /api/v1/chat` | SSE (`text/event-stream`) | `condense_query → retrieve (k=5) → generate_answer` | 1–4 s, tokens arrive progressively |
+| `POST /api/v1/chat` | SSE (`text/event-stream`) | `condense_query → retrieve (k=5) → assess_page → generate_answer` | 1–4 s, tokens arrive progressively |
 | `POST /api/v1/hint` | JSON | query from element label + page title → retrieve (k=3) → 1 LLM call → clamp 140 chars | first hover 300–1500 ms; repeats ~instant from cache |
 
 Both consume `RetrievalService.retrieve()` unchanged. Unknown `company_id` is
@@ -34,7 +34,7 @@ points; `ai/` calls `RetrievalService`. No other layer imports LangChain.
 routes/assist.py          POST /chat (SSE) · POST /hint (JSON)
   └─▶ ai/
         llm_factory.py    create_chat_llm(streaming, temperature, max_tokens)
-        prompts.py        CONDENSE_PROMPT · ANSWER_SYSTEM · HINT_PROMPT + formatters
+        prompts.py        CONDENSE_PROMPT · PAGE_STATE_PROMPT · ANSWER_SYSTEM · HINT_PROMPT + formatters
         chat_graph.py     ChatState · build_chat_graph(retrieval_service)
         hint_chain.py     build_hint_query · generate_hint
         └─▶ services/retrieval_service.py   retrieve(company_id, query, k) → list[Chunk]
@@ -54,14 +54,19 @@ Compile cost is negligible for the POC.
 Topology (`backend/app/ai/chat_graph.py`):
 
 ```
-START → condense_query → retrieve → generate_answer → END
+START → condense_query → retrieve → assess_page → generate_answer → END
 ```
 
 | Node | When it runs | LLM? | Writes |
 |---|---|---|---|
 | `condense_query` | Always. If `len(messages) == 1`, skips the LLM and copies the last user message into `query`. Follow-ups are rewritten into a standalone search query. Empty rewrite falls back to the raw last user message. | Yes, only on follow-ups (`temperature=0.0`, `max_tokens=100`) | `query` |
 | `retrieve` | Always | No — `RetrievalService.retrieve(company_id, query, k=5)` | `chunks` |
-| `generate_answer` | Always | Yes, streaming (`max_tokens=400`). System prompt is backend-owned; history is the request's `user`/`assistant` messages. | `answer` |
+| `assess_page` | Always, but skips the LLM (verdict `READY`) when `page_context.interactive` is empty — can't judge an uncaptured screen. Otherwise `PAGE_STATE_PROMPT` decides: task's controls visible → `READY`; missing (wrong page / not signed in) → one sentence naming the visible action to do first (e.g. the "Sign in" button). Empty reply falls back to `READY`. | Yes (`temperature=0.0`, `max_tokens=60`) | `page_state` |
+| `generate_answer` | Always | Yes, streaming (`max_tokens=400`). System prompt is backend-owned and embeds `page_state`; a non-`READY` verdict must become step 1. History is the request's `user`/`assistant` messages. | `answer` |
+
+The route yields only tokens whose `langgraph_node == "generate_answer"`, so
+the assess verdict — like the condense rewrite — never leaks into the SSE
+stream.
 
 ### State (`ChatState`)
 
@@ -73,6 +78,7 @@ START → condense_query → retrieve → generate_answer → END
   page_context,        # PageContext from the widget
   query,               # standalone search string (condense output)
   chunks,              # list[Chunk] from retrieval
+  page_state,          # READY or the blocker sentence (assess_page output)
   answer,              # full generated text (also streamed token-by-token)
 }
 ```
@@ -181,7 +187,8 @@ wire never accepts a client `system` message.
 | Prompt | Used by | Grounding rule |
 |---|---|---|
 | `CONDENSE_PROMPT` | `condense_query` (follow-ups only) | Rewrite the follow-up as a standalone **search query**. Return only the query text. |
-| `ANSWER_SYSTEM` | `generate_answer` | Answer **only** from the documentation excerpts and the current page snapshot. Point at a concrete on-screen element for UI actions. If the excerpts do not cover it, say so — do not invent features. Keep answers under 120 words. |
+| `PAGE_STATE_PROMPT` | `assess_page` | Given the task, visible elements, and excerpts: reply `READY` if the task's controls are on screen; otherwise ONE sentence saying what to do first (quoted visible label; email/password + sign-in button ⇒ sign in first). |
+| `ANSWER_SYSTEM` | `generate_answer` | Answer **only** from the documentation excerpts and the current page snapshot. **Current-page precondition**: the interactive-elements list is what is on screen right now — if the task's controls are missing (wrong page / not signed in), step 1 must be the visible action that gets there (e.g. the "Sign in" button); never present an off-screen control as visible. Point at a concrete on-screen element for UI actions (quoted verbatim labels). How-to questions: numbered step list (see [Step-list contract](#step-list-contract-guided-walkthroughs)). If the excerpts do not cover it, say so — do not invent features. Keep step lists concise; keep non-step answers under 120 words. |
 | `HINT_PROMPT` | `generate_hint` | One sentence, max 140 characters, grounded in the excerpts. If the excerpts do not mention the element, describe it neutrally from its label. No quotes, markdown, or exclamation marks. |
 
 Formatters (same file):
@@ -192,6 +199,64 @@ Formatters (same file):
 | `format_interactive` | `(none captured)` | `- <tag> "label" (selector_path)` |
 | `format_history` | — | `role: content` lines, **excluding** the last message (that is the follow-up) |
 | `format_element` | label falls back to `(unlabeled)` | `<tag> "label" role=… at selector_path` |
+
+### Step-list contract (guided walkthroughs)
+
+This is a **prompt-level wire convention**, not a schema or SSE change.
+`ChatRequest` / `token` / `done` stay the same. The widget parser
+(`widget/src/features/walkthrough/lib/parse-walkthrough-steps.ts`) is the
+other half of the contract — if the model ignores the format, the feature
+degrades to a normal chat answer (no "Walk me through it" button).
+
+Widget inventory (store, layer mount, auto-advance):
+[`01-architecture-overview.md`](01-architecture-overview.md#widget-feature-inventory--guided-walkthroughs).
+`03-widget.md` is still reserved/missing; when it lands, this section stays
+here (prompt ownership) and the widget half moves there.
+
+For how-to questions, `ANSWER_SYSTEM` instructs the model to answer as a
+numbered list — `1.` / `2.` … — one UI action per line, at most ONE element
+label in double quotes per line, max 8 steps. Only number the lines that
+are actual steps. Copy labels verbatim from the interactive-elements list.
+Plain text only (no markdown).
+
+Example assistant `content` the widget can turn into a walkthrough:
+
+```
+1. Click the "Reports" tab in the sidebar.
+2. Press the "Export report" button.
+3. Choose "CSV" from the format list.
+```
+
+`parseWalkthroughSteps` of that text yields:
+
+```
+[
+  { instruction: 'Click the "Reports" tab in the sidebar.', label: 'Reports' },
+  { instruction: 'Press the "Export report" button.', label: 'Export report' },
+  { instruction: 'Choose "CSV" from the format list.', label: 'CSV' },
+]
+```
+
+| Rule | Widget behavior |
+|---|---|
+| ≥2 numbered lines (`1.` or `1)`) | "Walk me through it" button appears under the completed assistant message |
+| `"Label"` in a step | First match of `/"([^"\n]{1,80})"/` becomes `label`; resolved lazily per step via `findElementByLabel` |
+| No quoted label | Step shows instruction only, no highlight (`label: null`) |
+| Prompt cap | Model is told **max 8 steps** |
+| Parser cap | `MAX_WALKTHROUGH_STEPS = 10` — extra numbered lines are dropped so a slight overshoot still walks |
+| Convention ignored by model | Parser returns `[]` — feature degrades to a normal answer |
+| Fewer than 2 numbered lines | Parser returns `[]` — no start button |
+
+Because of the current-page precondition rule above, a how-to answer asked
+from the wrong state (e.g. the login screen) starts with the visible
+navigation/sign-in step; the walkthrough then highlights that first and
+later steps resolve lazily once the right page is shown.
+
+`backend/tests/test_chat_graph.py` asserts the prompt still contains
+`"numbered list of steps"`, `"at most ONE on-screen element"`, and the
+current-page precondition phrases (`"RIGHT NOW"`, `"wrong page or not
+signed in"`, `"Never present a control as visible"`) so a regression in
+`ANSWER_SYSTEM` fails CI before the widget parser silently stops matching.
 
 ## LLM factory
 
@@ -211,6 +276,7 @@ Call-site defaults:
 | Call site | `streaming` | `temperature` | `max_tokens` |
 |---|---|---|---|
 | Condense | no | `0.0` | `100` |
+| Assess | no | `0.0` | `60` |
 | Answer | yes | factory default `0.2` | `400` |
 | Hint | no | `0.2` | `80` |
 
@@ -268,7 +334,7 @@ Unit tests in `backend/tests/` use in-memory fakes (no Mongo / Chroma / network)
 | `test_assist_models.py` | Contract caps (41 elements / 2001-char excerpt / empty messages → validation error) |
 | `test_hint_cache.py` | Key stability across query-string URL variants; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query prefers `text` then `aria-label`; 140-char clamp; `source: null` on empty KB |
-| `test_chat_graph.py` | Single message skips condense; retrieval called with `(company_id, query, 5)`; answer state non-empty |
+| `test_chat_graph.py` | Single message skips condense; retrieval called with `(company_id, query, 5)`; answer state non-empty; `assess_page` skips the LLM without captured elements and writes the blocker verdict into `page_state` otherwise |
 
 ```bash
 cd backend && python -m pytest tests/ -v

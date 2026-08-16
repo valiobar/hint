@@ -1,5 +1,5 @@
 import { type MouseEvent } from 'react';
-import { findElementByLabel } from '@/features/locate-element/lib/find-element-by-label';
+import { findElementByLabel } from '@/shared/lib/find-element-by-label';
 import { flashElement } from '@/features/locate-element/lib/flash-element';
 import { performElementAction } from '@/features/locate-element/lib/perform-element-action';
 import { PointerClickIcon } from '@/shared/ui/icons';

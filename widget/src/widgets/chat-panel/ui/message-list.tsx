@@ -1,6 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { MessageBubble } from '@/entities/message';
 import { renderWithElementChips } from '@/features/locate-element';
+import {
+	parseWalkthroughSteps,
+	WalkthroughStartButton,
+} from '@/features/walkthrough';
 import { useHintStore } from '@/shared/store/hint-store';
 import styles from '@/widgets/chat-panel/ui/chat-panel.module.css';
 
@@ -36,30 +40,47 @@ export const MessageList = () => {
 			className={styles.list}
 			data-testid="message-list"
 		>
-			{messages.map((message, index) => (
-				<MessageBubble
-					key={message.id}
-					role={message.role}
-					isFailed={message.isFailed}
-					isPending={
-						message.role === 'assistant' &&
-						message.content === '' &&
-						isStreaming &&
-						index === messages.length - 1
-					}
-					isStreaming={
-						message.role === 'assistant' &&
-						message.content !== '' &&
-						isStreaming &&
-						index === messages.length - 1
-					}
-					sources={message.sources}
-				>
-					{message.role === 'assistant'
-						? renderWithElementChips(message.content)
-						: message.content}
-				</MessageBubble>
-			))}
+			{messages.map((message, index) => {
+				const isCompletedAssistant =
+					message.role === 'assistant' &&
+					!message.isFailed &&
+					message.content !== '' &&
+					!(isStreaming && index === messages.length - 1);
+				const steps = isCompletedAssistant
+					? parseWalkthroughSteps(message.content)
+					: [];
+
+				return (
+					<Fragment key={message.id}>
+						<MessageBubble
+							role={message.role}
+							isFailed={message.isFailed}
+							isPending={
+								message.role === 'assistant' &&
+								message.content === '' &&
+								isStreaming &&
+								index === messages.length - 1
+							}
+							isStreaming={
+								message.role === 'assistant' &&
+								message.content !== '' &&
+								isStreaming &&
+								index === messages.length - 1
+							}
+							sources={message.sources}
+						>
+							{message.role === 'assistant'
+								? renderWithElementChips(
+										message.content,
+									)
+								: message.content}
+						</MessageBubble>
+						{steps.length > 0 && (
+							<WalkthroughStartButton steps={steps} />
+						)}
+					</Fragment>
+				);
+			})}
 		</div>
 	);
 };

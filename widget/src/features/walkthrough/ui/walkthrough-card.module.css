@@ -1,0 +1,164 @@
+.card {
+	box-sizing: border-box;
+	position: fixed;
+	left: var(--walkthrough-card-x);
+	top: var(--walkthrough-card-y);
+	max-width: 320px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--hint-space-2);
+	overflow: hidden;
+	background: color-mix(in srgb, var(--hint-surface) 92%, transparent);
+	color: var(--hint-text);
+	border: 1px solid var(--hint-border);
+	border-radius: var(--hint-radius-lg);
+	box-shadow: var(--hint-shadow-lg);
+	padding: var(--hint-space-3) var(--hint-space-4) var(--hint-space-3);
+	backdrop-filter: blur(16px);
+	z-index: var(--hint-z-tooltip);
+	font-family: var(--hint-font);
+}
+
+.below {
+	transform: translateX(-50%);
+	animation: cardInBelow var(--hint-duration-base) var(--hint-ease);
+}
+
+.above,
+.floating {
+	transform: translate(-50%, -100%);
+	animation: cardInAbove var(--hint-duration-base) var(--hint-ease);
+}
+
+@keyframes cardInBelow {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(-6px) scale(0.97);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0) scale(1);
+	}
+}
+
+@keyframes cardInAbove {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -100%) translateY(6px) scale(0.97);
+	}
+
+	to {
+		opacity: 1;
+		transform: translate(-50%, -100%) translateY(0) scale(1);
+	}
+}
+
+.progress {
+	position: absolute;
+	inset: 0 0 auto;
+	height: 3px;
+	background: var(--hint-accent-soft);
+}
+
+.progressFill {
+	display: block;
+	width: var(--walkthrough-progress);
+	height: 100%;
+	background: var(--hint-accent);
+	border-radius: 0 2px 2px 0;
+	transition: width var(--hint-duration-base) var(--hint-ease);
+}
+
+.counter {
+	margin: var(--hint-space-1) 0 0;
+	color: var(--hint-accent);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 1.3;
+	text-transform: uppercase;
+}
+
+.instruction {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 600;
+	line-height: 1.45;
+}
+
+.notFound {
+	margin: 0;
+	padding: var(--hint-space-2) var(--hint-space-3);
+	background: var(--hint-surface-muted);
+	border-radius: var(--hint-radius-sm);
+	color: var(--hint-text-muted);
+	font-size: 0.75rem;
+	line-height: 1.4;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--hint-space-2);
+	margin-block-start: var(--hint-space-1);
+}
+
+.actions button {
+	box-sizing: border-box;
+	padding: 0.35rem 0.7rem;
+	border: 1px solid var(--hint-border);
+	border-radius: 999px;
+	background: var(--hint-surface);
+	color: var(--hint-text);
+	font-family: var(--hint-font);
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background var(--hint-duration-fast) var(--hint-ease),
+		color var(--hint-duration-fast) var(--hint-ease),
+		border-color var(--hint-duration-fast) var(--hint-ease);
+}
+
+.actions button:hover:not(:disabled) {
+	background: var(--hint-accent-soft);
+	border-color: color-mix(in srgb, var(--hint-accent) 35%, var(--hint-border));
+	color: var(--hint-accent);
+}
+
+.actions button:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.actions button:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.actions .next {
+	background: var(--hint-accent);
+	border-color: var(--hint-accent);
+	color: #fff;
+}
+
+.actions .next:hover:not(:disabled) {
+	background: var(--hint-accent-hover);
+	border-color: var(--hint-accent-hover);
+	color: #fff;
+}
+
+.actions .stop {
+	margin-inline-start: auto;
+	border-color: transparent;
+	background: transparent;
+	color: var(--hint-text-muted);
+}
+
+.actions .stop:hover:not(:disabled) {
+	background: var(--hint-danger-soft);
+	border-color: transparent;
+	color: var(--hint-danger);
+}

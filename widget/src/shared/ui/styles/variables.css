@@ -6,6 +6,7 @@
 :host {
 	box-sizing: border-box;
 	--hint-accent: #4f46e5;
+	--hint-accent-hover: #3730a3;
 	--hint-accent-soft: #eef2ff;
 	--hint-surface: #ffffff;
 	--hint-surface-muted: #f8fafc;
@@ -13,9 +14,11 @@
 	--hint-text-muted: #64748b;
 	--hint-border: #e2e8f0;
 	--hint-danger: #dc2626;
+	--hint-danger-soft: #fef2f2;
 	--hint-radius-sm: 8px;
 	--hint-radius-lg: 16px;
 	--hint-shadow: 0 8px 30px rgb(15 23 42 / 0.16);
+	--hint-shadow-lg: 0 18px 40px rgb(15 23 42 / 0.18);
 	--hint-space-1: 0.25rem;
 	--hint-space-2: 0.5rem;
 	--hint-space-3: 0.75rem;
@@ -25,9 +28,12 @@
 	--hint-z-tooltip: 10;
 	/* ease-out-quint: fast start, soft landing — snappy but not abrupt */
 	--hint-ease: cubic-bezier(0.22, 1, 0.36, 1);
+	/* back-out: slight overshoot, used for the magnetic dock snap */
+	--hint-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 	--hint-duration-fast: 120ms;
 	--hint-duration-base: 180ms;
 	--hint-duration-slow: 280ms;
+	--hint-duration-snap: 420ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

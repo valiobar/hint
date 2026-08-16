@@ -167,5 +167,6 @@ def make_chat_state(
         "page_context": make_page_context(),
         "query": "",
         "chunks": [],
+        "page_state": "",
         "answer": "",
     }

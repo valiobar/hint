@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import type { ReactNode } from 'react';
-import { findElementByLabel } from '@/features/locate-element/lib/find-element-by-label';
+import { findElementByLabel } from '@/shared/lib/find-element-by-label';
 import { ElementChip } from '@/features/locate-element/ui/element-chip';
 
 // Models reference on-screen elements either as "quoted labels" (what the

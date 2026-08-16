@@ -51,6 +51,18 @@ export interface ActiveHint {
 	text: string | null;
 }
 
+export type DockSide = 'left' | 'right';
+
+export interface WalkthroughStep {
+	instruction: string;
+	label: string | null;
+}
+
+export interface WalkthroughState {
+	steps: WalkthroughStep[];
+	activeStepIndex: number;
+}
+
 interface HintState {
 	isOpen: boolean;
 	isHintModeEnabled: boolean;
@@ -59,6 +71,10 @@ interface HintState {
 	messages: UiChatMessage[];
 	chatError: string | null;
 	activeHint: ActiveHint | null;
+	dockSide: DockSide;
+	/** Guide bar center Y as a fraction of the viewport height. */
+	dockTopFraction: number;
+	walkthrough: WalkthroughState | null;
 	openPanel: () => void;
 	closePanel: () => void;
 	togglePanel: () => void;
@@ -66,7 +82,12 @@ interface HintState {
 	showHint: (rect: HintRectSnapshot, text: string | null) => void;
 	hideHint: () => void;
 	disableWidget: () => void;
+	setDockPosition: (side: DockSide, topFraction: number) => void;
 	sendMessage: (text: string) => Promise<void>;
+	startWalkthrough: (steps: WalkthroughStep[]) => void;
+	nextWalkthroughStep: () => void;
+	prevWalkthroughStep: () => void;
+	stopWalkthrough: () => void;
 }
 
 const toWireMessages = (messages: UiChatMessage[]): WireChatMessage[] =>
@@ -91,6 +112,9 @@ export const useHintStore = create<HintState>()(
 			messages: [],
 			chatError: null,
 			activeHint: null,
+			dockSide: 'right',
+			dockTopFraction: 0.5,
+			walkthrough: null,
 
 			openPanel: () => set({ isOpen: true }),
 			closePanel: () => set({ isOpen: false }),
@@ -104,7 +128,52 @@ export const useHintStore = create<HintState>()(
 					isDisabled: true,
 					isHintModeEnabled: false,
 					activeHint: null,
+					walkthrough: null,
 				}),
+			setDockPosition: (side, topFraction) =>
+				set({ dockSide: side, dockTopFraction: topFraction }),
+			startWalkthrough: (steps) => {
+				if (steps.length < 2 || get().isDisabled) {
+					return;
+				}
+				set({
+					walkthrough: { steps, activeStepIndex: 0 },
+					isOpen: false,
+					activeHint: null,
+				});
+			},
+			nextWalkthroughStep: () =>
+				set((s) => {
+					if (!s.walkthrough) {
+						return s;
+					}
+					const next = s.walkthrough.activeStepIndex + 1;
+					return next >= s.walkthrough.steps.length
+						? { ...s, walkthrough: null }
+						: {
+								...s,
+								walkthrough: {
+									...s.walkthrough,
+									activeStepIndex: next,
+								},
+							};
+				}),
+			prevWalkthroughStep: () =>
+				set((s) =>
+					s.walkthrough
+						? {
+								...s,
+								walkthrough: {
+									...s.walkthrough,
+									activeStepIndex: Math.max(
+										0,
+										s.walkthrough.activeStepIndex - 1,
+									),
+								},
+							}
+						: s,
+				),
+			stopWalkthrough: () => set({ walkthrough: null }),
 
 			sendMessage: async (text) => {
 				const trimmed = text.trim();
@@ -125,6 +194,7 @@ export const useHintStore = create<HintState>()(
 					],
 					isStreaming: true,
 					chatError: null,
+					walkthrough: null,
 				}));
 
 				const patchAssistant = (patch: Partial<UiChatMessage>) =>
@@ -192,6 +262,8 @@ export const useHintStore = create<HintState>()(
 					.filter((m) => m.content.length > 0)
 					.slice(-MAX_MESSAGES),
 				isHintModeEnabled: s.isHintModeEnabled,
+				dockSide: s.dockSide,
+				dockTopFraction: s.dockTopFraction,
 			}),
 		},
 	),

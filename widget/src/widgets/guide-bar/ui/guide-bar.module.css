@@ -1,9 +1,28 @@
+/*
+ * The bar is split in two layers:
+ * - .positioner — fixed placement + the magnetic snap glide. It is
+ *   never transformed, so measuring it always yields exact layout
+ *   coordinates for the dock math.
+ * - .bar — all visuals. The drag "pick-up" rotates it 90deg (a fully
+ *   animatable transform, unlike flex-direction), and the buttons
+ *   counter-rotate to keep their icons upright.
+ */
+.positioner {
+	position: fixed;
+	left: var(--bar-x, auto);
+	top: var(--bar-y, 50%);
+	transition:
+		left var(--hint-duration-snap) var(--hint-ease-spring),
+		top var(--hint-duration-snap) var(--hint-ease-spring);
+}
+
+/* Pointer must track 1:1 while dragging */
+.positionerDragging {
+	transition: none;
+}
+
 .bar {
 	box-sizing: border-box;
-	position: fixed;
-	top: 50%;
-	right: 0;
-	transform: translateY(-50%);
 	display: flex;
 	flex-direction: column;
 	gap: var(--hint-space-2);
@@ -15,21 +34,56 @@
 	box-shadow: var(--hint-shadow);
 	font-family: var(--hint-font);
 	color: var(--hint-text);
-	/* Entrance: slide in from the right edge shortly after load so
-	   the widget announces itself on the host page. `backwards` keeps
-	   it hidden during the delay. */
+	transition:
+		transform var(--hint-duration-snap) var(--hint-ease-spring),
+		border-radius var(--hint-duration-slow) var(--hint-ease),
+		box-shadow var(--hint-duration-slow) var(--hint-ease);
+	/* Entrance: soft pop shortly after load. Direction-agnostic so it
+	   never replays when the dock side changes. `backwards` keeps the
+	   bar hidden during the delay. */
 	animation: barIn 320ms var(--hint-ease) 300ms backwards;
+}
+
+.grip {
+	display: grid;
+	place-items: center;
+	inline-size: 2.25rem;
+	block-size: 1rem;
+	color: var(--hint-text-muted);
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.dockedLeft {
+	border: 1px solid var(--hint-border);
+	border-left: none;
+	border-radius: 0 var(--hint-radius-lg) var(--hint-radius-lg) 0;
+}
+
+/* Picked-up state: rotated horizontal, lifted */
+.dragging {
+	border: 1px solid var(--hint-border);
+	border-radius: var(--hint-radius-lg);
+	transform: rotate(90deg) scale(1.05);
+	box-shadow: 0 12px 40px rgb(15 23 42 / 0.24);
+	cursor: grabbing;
+}
+
+.dragging .grip {
+	cursor: grabbing;
 }
 
 @keyframes barIn {
 	from {
 		opacity: 0;
-		transform: translateY(-50%) translateX(100%);
+		transform: scale(0.85);
 	}
 
 	to {
 		opacity: 1;
-		transform: translateY(-50%) translateX(0);
+		transform: scale(1);
 	}
 }
 
@@ -67,6 +121,13 @@
 
 .barButton:disabled {
 	cursor: not-allowed;
+}
+
+/* Keep button icons upright while the bar itself is rotated; the
+   counter-rotation matches the bar's twist timing */
+.dragging .barButton {
+	transform: rotate(-90deg);
+	transition: transform var(--hint-duration-snap) var(--hint-ease-spring);
 }
 
 .active {

@@ -5,6 +5,8 @@
 	--color-text-muted: #4b5563;
 	--color-border: #e5e7eb;
 	--color-accent: #2563eb;
+	--color-accent-hover: #1d4ed8;
+	--color-accent-soft: #eff6ff;
 	--color-ok: #15803d;
 	--color-warn: #c2410c;
 	--color-error: #b91c1c;
@@ -15,4 +17,6 @@
 	--space-3: 1rem;
 	--space-4: 1.5rem;
 	--radius: 0.5rem;
+	--radius-lg: 0.85rem;
+	--shadow: 0 10px 28px rgb(17 24 39 / 0.08);
 }

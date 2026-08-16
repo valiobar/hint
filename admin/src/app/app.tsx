@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui';
 import { ApiStatusBadge } from '@/widgets/api-status';
 import { CompaniesSidebar } from '@/widgets/companies-sidebar';
 import { CompanyDetail } from '@/widgets/company-detail';
+import { ProductOverview } from '@/widgets/product-overview';
 import styles from './app.module.css';
 
 export const App = () => {
@@ -52,10 +53,7 @@ export const App = () => {
 					{selectedCompanyId ? (
 						<CompanyDetail />
 					) : (
-						<p className={styles.placeholder}>
-							Select a company on the left — or create one — to
-							manage its knowledge base and get the embed snippet.
-						</p>
+						<ProductOverview />
 					)}
 				</main>
 			</div>
