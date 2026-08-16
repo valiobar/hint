@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.models.company import Company, CompanyCreate
+from app.models.company import Company, CompanyCreate, WidgetConfigUpdate
 from app.routes.deps import get_company_service
 from app.services.company_service import CompanyService
 
@@ -28,6 +28,20 @@ async def get_company(
     svc: CompanyService = Depends(get_company_service),
 ) -> Company:
     company = await svc.get_company(company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Unknown company_id")
+    return company
+
+
+@router.patch("/{company_id}/widget-config", response_model=Company)
+async def update_widget_config(
+    company_id: str,
+    body: WidgetConfigUpdate,
+    svc: CompanyService = Depends(get_company_service),
+) -> Company:
+    company = await svc.update_widget_config(
+        company_id, body.suggested_questions
+    )
     if company is None:
         raise HTTPException(status_code=404, detail="Unknown company_id")
     return company

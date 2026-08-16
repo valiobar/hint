@@ -10,3 +10,18 @@ export const createCompany = (name: string): Promise<Company> =>
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ name }),
 	});
+
+export const updateWidgetConfig = (
+	companyId: string,
+	suggestedQuestions: string[],
+): Promise<Company> =>
+	request<Company>(
+		`/api/v1/companies/${companyId}/widget-config`,
+		{
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				suggested_questions: suggestedQuestions,
+			}),
+		},
+	);

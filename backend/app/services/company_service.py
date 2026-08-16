@@ -1,4 +1,4 @@
-from app.models.company import Company
+from app.models.company import Company, WidgetConfig
 from app.repositories.company_repo import CompanyRepository
 
 
@@ -14,3 +14,19 @@ class CompanyService:
 
     async def get_company(self, company_id: str) -> Company | None:
         return await self.repo.find_by_company_id(company_id)
+
+    async def get_widget_config(self, company_id: str) -> WidgetConfig | None:
+        company = await self.repo.find_by_company_id(company_id)
+        if company is None:
+            return None
+        return WidgetConfig(
+            company_id=company.company_id,
+            suggested_questions=company.suggested_questions,
+        )
+
+    async def update_widget_config(
+        self, company_id: str, questions: list[str]
+    ) -> Company | None:
+        return await self.repo.replace_suggested_questions(
+            company_id, questions
+        )

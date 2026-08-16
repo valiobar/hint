@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
 	listCompanies,
 	createCompany as apiCreateCompany,
+	updateWidgetConfig as apiUpdateWidgetConfig,
 	listDocuments,
 	uploadDocuments as apiUploadDocuments,
 	deleteDocument as apiDeleteDocument,
@@ -35,6 +36,8 @@ interface AdminState {
 	documentsError: string | null;
 	uploadingFiles: UploadingFile[];
 	uploadError: string | null;
+	isSavingSuggestedQuestions: boolean;
+	suggestedQuestionsError: string | null;
 	login: (email: string, password: string) => Promise<void>;
 	logout: () => void;
 	restoreSession: () => Promise<void>;
@@ -44,6 +47,7 @@ interface AdminState {
 	loadDocuments: () => Promise<void>;
 	uploadDocuments: (files: File[]) => Promise<void>;
 	deleteDocument: (documentId: string) => Promise<void>;
+	updateSuggestedQuestions: (questions: string[]) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -60,6 +64,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 	documentsError: null,
 	uploadingFiles: [],
 	uploadError: null,
+	isSavingSuggestedQuestions: false,
+	suggestedQuestionsError: null,
 
 	login: async (email, password) => {
 		set({ isAuthenticating: true, authError: null });
@@ -88,6 +94,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			documentsError: null,
 			uploadingFiles: [],
 			uploadError: null,
+			isSavingSuggestedQuestions: false,
+			suggestedQuestionsError: null,
 		});
 	},
 
@@ -128,6 +136,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			documents: [],
 			documentsError: null,
 			uploadError: null,
+			suggestedQuestionsError: null,
 		});
 		await get().loadDocuments();
 	},
@@ -181,6 +190,35 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			}));
 		} catch (err) {
 			set({ documentsError: toErrorMessage(err) });
+		}
+	},
+
+	updateSuggestedQuestions: async (questions) => {
+		const companyId = get().selectedCompanyId;
+		if (!companyId) {
+			return;
+		}
+		set({
+			isSavingSuggestedQuestions: true,
+			suggestedQuestionsError: null,
+		});
+		try {
+			const updated = await apiUpdateWidgetConfig(companyId, questions);
+			set((s) => ({
+				companies: s.companies.map((c) =>
+					c.company_id === updated.company_id
+						? {
+								...updated,
+								suggested_questions:
+									updated.suggested_questions ?? [],
+							}
+						: c,
+				),
+			}));
+		} catch (err) {
+			set({ suggestedQuestionsError: toErrorMessage(err) });
+		} finally {
+			set({ isSavingSuggestedQuestions: false });
 		}
 	},
 }));

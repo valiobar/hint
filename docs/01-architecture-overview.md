@@ -36,19 +36,21 @@ there is no conflict.
 
 What works today (Phase 3 — the admin SPA is the primary operator path; curl is
 the debug path). Admin companies/documents calls carry
-`Authorization: Bearer <jwt>`. `/retrieve`, `/chat`, `/hint`, and `/health`
-stay public for the widget.
+`Authorization: Bearer <jwt>`. `/retrieve`, `/chat`, `/hint`, `GET /companies/{id}/widget-config`, and
+`/health` stay public for the widget.
 
 ```
 Admin SPA (:3001) — see 04-admin.md / 05-auth.md:
   POST /api/v1/auth/login  {email, password} ──▶ backend ──▶ users (bcrypt) ──▶ JWT
   GET  /api/v1/auth/me     Bearer ───────────▶ backend ──▶ session restore
   GET/POST /api/v1/companies  Bearer ────────▶ backend ──▶ MongoDB (companies)
+  PATCH /api/v1/companies/{id}/widget-config Bearer ▶ backend ──▶ companies.suggested_questions
   POST /api/v1/companies/{id}/documents Bearer ▶ backend ──▶ extract → chunk (800/150) → embed → ChromaDB (kb_{id})
                                                           └─▶ MongoDB (documents metadata: processing → ready | failed)
   GET /health (no token) ────────────────────▶ backend ──▶ ping Mongo + Chroma
 
 Widget path (public — no token; live as of Phase 3):
+  GET  /api/v1/companies/{id}/widget-config ─▶ backend ──▶ companies.suggested_questions (empty-state chips)
   POST /api/v1/retrieve ─────────────────────▶ backend ──▶ Chroma query (kb_{id}) → top-k chunks
   POST /api/v1/chat     (SSE) ───────────────▶ backend ──▶ LangGraph (condense → retrieve k=5 → assess page → answer)
   POST /api/v1/hint     (JSON) ──────────────▶ backend ──▶ retrieve k=3 → 1 LLM call → clamp 140 chars
@@ -225,7 +227,7 @@ open http://localhost:3002
 
 | Action | Behavior |
 |---|---|
-| `clearMessages()` | No-op while `isStreaming`. Resets `messages`, `chatError`, `walkthrough`. Persisted `messages` clear via the existing `partialize`. Bound to the header "New chat" button (`chat-panel-new-chat`), disabled while streaming or when there is nothing to clear. |
+| `clearMessages()` | No-op while `isStreaming`. Resets `messages`, `chatError`, `walkthrough`. Persisted `messages` clear via the existing `partialize`. Bound to the header "New chat" button (`chat-panel-new-chat`), disabled while streaming or when there is nothing to clear. Empty state remounts; starter chips return from the in-memory widget-config cache (no second GET). |
 
 Assistant messages render through `MarkdownContent`
 (`widget/src/shared/ui/markdown/`) over `parseMarkdownBlocks`
@@ -244,6 +246,16 @@ markdown, transient "Copied" state for 2 s via `useCopyToClipboard`;
 requires a secure context for `navigator.clipboard` — on plain-HTTP
 hosts the write fails silently with a dev console warning).
 
+When `messages.length === 0`, the empty state keeps the existing sentence
+and mounts `features/suggested-questions` underneath. That feature GETs
+`/api/v1/companies/{id}/widget-config` (public, no token) and renders
+0–4 chips. Clicking a chip calls the existing `sendMessage(question)`.
+Copy is **static per company** (edited in Admin). The widget caches the
+list in a module `Map` for the page lifetime — a "New chat" reuses the
+cache; a host **reload** refetches so Admin edits show up. Fetch 404 /
+network failure yields `[]` (sentence only, no error banner). v2
+(generate from Chroma + page headings) is **not** built.
+
 ## Backend layering
 
 `backend/app/` follows `routes/ → services/ → repositories/ → models/` (top-down only).
@@ -251,7 +263,8 @@ hosts the write fails silently with a dev console warning).
 `RetrievalService`. As of Phase 3 the layers include auth, companies, documents,
 retrieve, and assist (`routes/assist.py`, `ai/chat_graph.py`, `ai/hint_chain.py`,
 `services/hint_cache.py`, `models/assist.py`). Companies/documents routers take
-`require_admin`; `/retrieve`, `/chat`, `/hint`, and `/health` stay public.
+`require_admin`; `/retrieve`, `/chat`, `/hint`,
+`GET /companies/{id}/widget-config`, and `/health` stay public.
 Full inventory: [`02-backend.md`](02-backend.md), [`05-auth.md`](05-auth.md),
 [`06-ai-layer.md`](06-ai-layer.md).
 

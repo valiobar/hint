@@ -22,7 +22,7 @@ admin/src/
 │   └── styles/global.css            # reset; imports shared tokens
 ├── widgets/
 │   ├── companies-sidebar/           # list + create-company feature
-│   ├── company-detail/              # snippet + upload + document list
+│   ├── company-detail/              # snippet + starter questions + upload + document list
 │   ├── product-overview/            # unselected-company product + feature cards
 │   └── api-status/                  # GET /health badge (public, no token)
 ├── features/
@@ -30,7 +30,8 @@ admin/src/
 │   ├── create-company/              # Zod schema + name form
 │   ├── upload-documents/            # client pre-validation + dropzone
 │   ├── delete-document/             # confirm + store action
-│   └── copy-embed-snippet/          # buildEmbedSnippet + CopyBlock
+│   ├── copy-embed-snippet/          # buildEmbedSnippet + CopyBlock
+│   └── edit-suggested-questions/    # 0–4 starter chips for the widget empty state
 ├── entities/
 │   ├── company/                     # CompanyListItem
 │   └── document/                    # DocumentRow (status pill + error)
@@ -65,6 +66,8 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `documentsError` | `string \| null` | List/delete failures |
 | `uploadingFiles` | `{ name, sizeBytes }[]` | Placeholder rows during the request |
 | `uploadError` | `string \| null` | 503 / 413 / network under the dropzone |
+| `isSavingSuggestedQuestions` | `boolean` | Save button "Saving…" on the starter-questions form |
+| `suggestedQuestionsError` | `string \| null` | PATCH `detail` or network under the form |
 
 ### Actions
 
@@ -79,6 +82,7 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `loadDocuments()` | `GET /companies/{id}/documents` (no-op if nothing selected) |
 | `uploadDocuments(files)` | Show uploading rows → multipart POST → refresh list |
 | `deleteDocument(id)` | `DELETE` then drop the row locally |
+| `updateSuggestedQuestions(questions)` | `PATCH …/widget-config` → replace that company in `companies` |
 
 All async actions surface `ApiError.detail` via `toErrorMessage`. `createCompany`
 lets the form catch the throw (inline error). The others set store error fields.
@@ -98,6 +102,7 @@ boundary).
 | companies-sidebar | `GET /api/v1/companies` | bearer |
 | create-company | `POST /api/v1/companies` | bearer |
 | company-detail | `GET /api/v1/companies/{id}/documents` | bearer |
+| edit-suggested-questions | `PATCH /api/v1/companies/{id}/widget-config` | bearer |
 | upload-documents | `POST /api/v1/companies/{id}/documents` (multipart `files`) | bearer |
 | delete-document | `DELETE /api/v1/companies/{id}/documents/{doc_id}` | bearer |
 | api-status | `GET /health` | public (raw `fetch`, no token) |
@@ -131,6 +136,7 @@ shipped widget/admin UI.
 |---|---|
 | Knowledge base | Company → Documents dropzone |
 | Embed snippet | Company → copy block |
+| Starter questions | Company → four fields under the snippet; Save |
 | Guide bar | Host page pill; Ctrl/Cmd + / |
 | Chat | Sparkle on the guide bar |
 | Element chips | Quoted labels in a completed chat answer |
@@ -145,8 +151,12 @@ shipped widget/admin UI.
    (`validateFiles`). Invalid files stay local (`name: reason`); valid ones POST.
 4. During the request, placeholder rows show a `uploading` pill. The response
    replaces them with `ready` / `failed` (failed rows show `document.error`).
-5. Copy block holds the documented script tag (see below). Confirm dialog before
-   delete: `Delete "{filename}" and its knowledge-base chunks?`
+5. Copy block holds the documented script tag (see below). Under it, **Starter
+   questions** (`features/edit-suggested-questions/`) offers four optional
+   fields (max 120 chars each). Save sends the non-empty trimmed lines
+   (`PATCH …/widget-config`). An empty save is valid and clears chips on the
+   next host **reload** (the widget caches in memory for the tab lifetime).
+   Confirm dialog before delete: `Delete "{filename}" and its knowledge-base chunks?`
 
 ### Session across reload
 

@@ -2,6 +2,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { DocumentRow } from '@/entities/document';
 import { DeleteDocumentButton } from '@/features/delete-document';
 import { EmbedSnippet } from '@/features/copy-embed-snippet';
+import { SuggestedQuestionsForm } from '@/features/edit-suggested-questions';
 import { FileDropzone } from '@/features/upload-documents';
 import { useAdminStore } from '@/shared/store/admin-store';
 import { Spinner, StatusPill } from '@/shared/ui';
@@ -38,6 +39,7 @@ export const CompanyDetail = () => {
 				<code>{company.company_id}</code>
 			</header>
 			<EmbedSnippet companyId={company.company_id} />
+			<SuggestedQuestionsForm />
 			<h3>Documents</h3>
 			<FileDropzone />
 			{isLoadingDocuments && <Spinner />}

@@ -3,8 +3,9 @@
 Operator guide for the Hint Admin panel at **http://localhost:3001**.
 
 Use this app to create companies, upload product documentation into each company's
-knowledge base, watch ingestion status, delete docs, and copy the embed snippet
-that turns Hint on in a host page (including the demo at http://localhost:3002).
+knowledge base, watch ingestion status, delete docs, set starter questions for
+the widget empty state, and copy the embed snippet that turns Hint on in a host
+page (including the demo at http://localhost:3002).
 
 This is the **operator** UI. End users never see it — they see the Hint widget
 on the customer app (or the Acme Invoicing demo). For the demo host itself, see
@@ -21,10 +22,13 @@ on the customer app (or the Acme Invoicing demo). For the demo host itself, see
 | Upload `.pdf` / `.md` / `.txt` / `.html` | Text is extracted, chunked, embedded, stored in Chroma |
 | Wait until status is `ready` | Chat and hover hints can answer from that doc |
 | Copy the embed snippet | Paste into a host page (or override the demo company) |
+| Save starter questions | Empty chat on the host shows those lines as clickable chips |
 | Delete a document | Removes the file metadata **and** its vector chunks |
 
 Admin does **not** chat, show hover hints, or edit documents in place. Those
-happen on the host page through the widget.
+happen on the host page through the widget. Starter questions are **static
+copy you type here** — they are not generated from the knowledge base or
+the current page.
 
 ---
 
@@ -105,6 +109,10 @@ stays valid on the server until it expires.
 │  Acme Corp         │  Embed snippet                          │
 │  cmp_1a2b3c4d      │  <script …>                    [Copy]   │
 │                    │                                         │
+│                    │  Starter questions                      │
+│                    │  [How do I …                    ] × 4   │
+│                    │                    [Save questions]     │
+│                    │                                         │
 │  Contoso           │  Documents                              │
 │  cmp_9f8e7d6c      │  [ drop / browse files ]                │
 │                    │  user-manual.md  12 KB · 8 chunks  ready│
@@ -116,7 +124,7 @@ stays valid on the server until it expires.
 |---|---|
 | Header | Title, API health badge, signed-in email, **Sign out** |
 | Left sidebar | Create-company form + company list |
-| Right pane | Empty placeholder until you select or create a company; then name, id, snippet, dropzone, document list |
+| Right pane | Empty placeholder until you select or create a company; then name, id, snippet, starter questions, dropzone, document list |
 
 After a **page reload**, companies come back but **nothing is selected**. Click
 the company again. That is expected — selection is not saved.
@@ -168,6 +176,7 @@ shows:
 - Company **name**
 - `company_id` in a `<code>` block (this is what the widget uses)
 - Embed snippet
+- Starter questions (four optional fields)
 - Documents dropzone and list
 
 There is no search or sort. Newest created company is first.
@@ -311,7 +320,57 @@ includes a duplicate on purpose.
 
 ---
 
-## 12. Recommended first-time walkthrough
+## 12. Starter questions
+
+When a company is selected, **Starter questions** sits under the embed
+snippet. These lines become clickable chips in the widget when the chat
+thread is empty. Clicking a chip sends that exact text as the first
+user message (same path as typing and hitting send).
+
+New companies start with **no** questions. Until you save some, the
+widget empty state is only the existing sentence
+(“Ask anything about this app…”).
+
+### How to save
+
+1. Select a company.
+2. Fill any of the four fields (placeholder `How do I …`). Empty slots
+   are fine — only non-empty trimmed lines are saved.
+3. Click **Save questions** (label becomes **Saving…**).
+4. Reload the **host** page (Demo or the real embed). Open an empty
+   chat. The chips should match what you saved.
+
+| Rule | What happens |
+|---|---|
+| 0–4 questions | Four fields; blank ones are dropped on save |
+| Each line 1–120 characters after trim | Longer text: `Each question must be at most 120 characters` |
+| Save with every field empty | Valid — clears chips after the next host reload |
+| Duplicate lines | Allowed (no uniqueness check) |
+
+The widget caches the list **in memory for that tab**. A “New chat” in
+the same tab brings the chips back without another request. An Admin
+edit does **not** appear until the host page is reloaded.
+
+### Checking it on Demo
+
+```
+http://localhost:3002/?company_id=cmp_YOUR_ID
+```
+
+Open Hint chat with an empty thread. You should see up to four chips
+under the empty-state sentence. Click one — that question is sent.
+
+### Errors
+
+| Message | Meaning | What to do |
+|---|---|---|
+| `Each question must be at most 120 characters` | A field is too long (client check) | Shorten it and save again |
+| Backend `detail` under the form (422) | More than 4 items, a blank entry, or a line over 120 characters | Fix the fields; the last good save is still stored |
+| Network / unreachable | Backend down | Check the health badge; retry Save |
+
+---
+
+## 13. Recommended first-time walkthrough
 
 1. Set `ADMIN_PASSWORD` and `OPENAI_API_KEY` in `.env`. Start the stack.
 2. Open http://localhost:3001 and sign in.
@@ -320,17 +379,21 @@ includes a duplicate on purpose.
 5. Upload [`USER_MANUAL.md`](USER_MANUAL.md) from this `demo/` folder (it
    describes every control on the demo page — good Hint training data).
 6. Wait until the row is `ready` and `chunk_count` is greater than 0.
-7. Copy the snippet, or open
+7. Under the snippet, save three starter questions (e.g. “How do I
+   create an invoice?”, “How do I export a report?”, “How do I add a
+   customer?”).
+8. Copy the snippet, or open
    `http://localhost:3002/?company_id=` plus the `cmp_…` id from the header.
-8. On the demo: open Hint chat and ask “how do I create an invoice?”
-9. Toggle the lightbulb and hover **Export report** / **Customer name**.
+9. On the demo: open Hint chat — click a chip, or type “how do I create
+   an invoice?”
+10. Toggle the lightbulb and hover **Export report** / **Customer name**.
 
 If answers are empty or generic, the doc is not `ready`, the wrong
 `company_id` is on the page, or the API key is missing.
 
 ---
 
-## 13. Sign out and sessions
+## 14. Sign out and sessions
 
 | Action | Result |
 |---|---|
@@ -346,7 +409,7 @@ is required on the next login.
 
 ---
 
-## 14. What you cannot do in this POC
+## 15. What you cannot do in this POC
 
 - Create extra admin users, roles, or invite links
 - Reset or change the password from the UI
@@ -355,12 +418,14 @@ is required on the next login.
 - Search / filter / paginate companies or documents
 - See chat transcripts or hint analytics
 - Configure the widget look (colors, position) from Admin
+- Auto-generate starter questions from the knowledge base or the
+  current page (v2 — not built)
 
 Those are out of scope for the current panel.
 
 ---
 
-## 15. Troubleshooting
+## 16. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -372,13 +437,15 @@ Those are out of scope for the current panel.
 | Upload 503 about `OPENAI_API_KEY` | Key missing | Set it, restart backend |
 | Every PDF is `failed` | Scanned / image-only PDF | Use a text PDF, `.md`, or `.txt` |
 | `ready` but chat knows nothing | Widget still on `cmp_demo0001` | Use `?company_id=` or paste the new snippet |
+| Empty chat has no chips | Never saved, saved empty, or host not reloaded | Save 1–4 lines, then **reload Demo** with the same `?company_id=` |
+| Chips still show the old copy after Save | Widget caches the list for the tab | Reload the host page (New chat is not enough) |
 | Reload “lost” the company | Selection is in-memory | Click the company in the sidebar |
 | Copy does nothing | Clipboard API blocked | Select the snippet text and copy |
 | Admin UI looks old after a code change | Admin image is built at Docker build time | `docker compose up -d --build admin` (restart alone is not enough) |
 
 ---
 
-## 16. Environment that affects Admin
+## 17. Environment that affects Admin
 
 Admin itself only bakes two URLs at **image build** time:
 
@@ -401,17 +468,18 @@ These backend variables control whether you can sign in and upload:
 
 ---
 
-## 17. Related files
+## 18. Related files
 
 | Path | Role |
 |---|---|
 | http://localhost:3001 | Admin app |
 | `demo/ADMIN_USER_MANUAL.md` | This manual |
 | `demo/USER_MANUAL.md` | Demo host (Acme Invoicing) manual — good upload fodder |
+| `docs/HOW_TO_PLAY.md` | Tester playthrough (save questions → Demo chips) |
 | `docs/04-admin.md` | Admin architecture (FSD, store, APIs) |
 | `docs/05-auth.md` | JWT, seeding, rotation |
 | `docs/02-backend.md` | Upload / retrieve contracts |
 
 ---
 
-*Last updated for the Phase 2 Hint Admin panel (login, companies, documents, snippet).*
+*Last updated for starter questions (empty-state chips configured per company).*

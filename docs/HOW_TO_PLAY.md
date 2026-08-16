@@ -111,7 +111,12 @@ the viewport) with chat and a lightbulb.
 
 ### 5. Chat
 
-Click the chat icon on the guide bar. Ask:
+In Admin, under the embed snippet, save 3 starter questions (for
+example “How do I create an invoice?”). Reload Demo, open chat — the
+empty state shows those chips. Click one: it sends that exact text as
+the first user message.
+
+Or type:
 
 > How do I create an invoice?
 
@@ -150,6 +155,7 @@ control to advance).
 | Upload docs | Drop or browse `.pdf` / `.md` / `.txt` / `.html` | Status `uploading` → `ready` |
 | Failed ingest | Upload a scanned PDF | Status `failed` with a reason; other files in the same batch can still succeed |
 | Copy embed snippet | Company detail pane | `<script src="…/loader.js" data-hint-company-id="cmp_…" data-hint-api-url="…">` |
+| Starter questions | Company detail, under the snippet — save up to 4 lines | Demo empty chat shows those chips after a **reload** of the host page |
 | Delete document | Delete on a ready row | File and its vectors gone; chat no longer cites it |
 
 Admin does **not** include end-user chat. Use Demo for that.
@@ -174,6 +180,7 @@ Admin does **not** include end-user chat. Use Demo for that.
 | Markdown | Ask for steps | Numbered/bullet lists and `` `code` `` render as lists/code, not a wall of text |
 | Element chips | Answer mentions a control in `"quotes"` or **bold** | Chip in the bubble; click it → host control flashes / is clicked or focused |
 | Copy answer | Copy icon on a finished assistant bubble | Copies the raw markdown. On **http://** (no TLS) the clipboard write may fail silently — that is a browser limit, not a broken button |
+| Starter chips | Empty chat after Admin saved 3 questions (reload Demo) | Chips under the empty-state sentence; click sends that label. New chat brings them back without another GET. Save `[]` in Admin + reload → chips gone, sentence remains |
 | New chat | Header button (page icon) | Thread clears. Disabled while streaming or when the thread is already empty |
 | Persistence | Send a message, refresh Demo | Same thread comes back (`sessionStorage`, per company). A walkthrough in progress does **not** survive refresh |
 
@@ -332,6 +339,8 @@ Useful so testers do not file these as bugs:
 - Hover-hint cache dies when the backend process restarts
 - Not a generic web assistant — it only knows uploaded docs + the page
   snapshot
+- Starter questions are **static per company** (Admin copy). v2
+  (generate from the knowledge base + current page headings) is not built
 
 ---
 

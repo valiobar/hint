@@ -156,6 +156,7 @@
 	flex: 1;
 	display: grid;
 	place-items: center;
+	align-content: center;
 	padding: var(--hint-space-4);
 	color: var(--hint-text-muted);
 	font-size: 0.85rem;

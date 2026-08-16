@@ -23,8 +23,9 @@ doc to upload.
 Traffic: Admin / Demo / Widget (browser) → Backend (`:8000`). Mongo and
 Chroma stay on the compose network only. Chroma listens on 8000 *inside*
 the network (same as backend) but is never published to the host. Admin
-companies/documents calls send a JWT; `/retrieve`, `/chat`, `/hint`, and
-`/health` stay public so the embed works without credentials.
+companies/documents calls send a JWT; `/retrieve`, `/chat`, `/hint`,
+`GET /companies/{id}/widget-config`, and `/health` stay public so the
+embed works without credentials.
 
 ## Quick start
 
@@ -63,14 +64,18 @@ With `ADMIN_PASSWORD` and `OPENAI_API_KEY` set, stack up:
 3. Create a company (name, 1–100 characters). Copy the `cmp_…` id.
 4. Drop or browse product docs (`.pdf`, `.md`, `.txt`, `.html`, ≤ 10 MB).
    Rows go `uploading` → `ready` (or `failed` — e.g. a scanned PDF).
-5. Open the demo **with that company** (do not skip the query param):
+5. Under the embed snippet, save 3 starter questions (optional). Open
+   the demo **with that company** (do not skip the query param):
 
    ```
    http://localhost:3002/?company_id=cmp_YOUR_ID
    ```
 
-6. Use the Hint guide bar (bottom of the viewport): chat, lightbulb for
-   hover hints, **Walk me through it** on numbered how-to answers.
+6. Use the Hint guide bar (bottom of the viewport): empty chat shows
+   those chips (click one to send it), lightbulb for hover hints,
+   **Walk me through it** on numbered how-to answers. Reload the host
+   after editing questions in Admin — the widget caches them in memory
+   until then.
 
 Reload stays signed in on Admin (token in `localStorage`). Sign out
 clears it. A 401 returns you to the login screen.
@@ -93,6 +98,7 @@ isolation from the host page).
 |---|---|
 | Guide bar | Chat toggle + lightbulb (hover-hint mode); drag to dock left/right |
 | Chat | SSE token stream, source filenames, follow-ups, page-aware answers |
+| Starter chips | Empty-state chips from Admin (`GET …/widget-config`, in-memory cache; reload to pick up edits) |
 | Markdown | Numbered/bullet lists and inline code in assistant bubbles |
 | Element chips | Quoted / bold control names; click flashes or acts on the host control |
 | Copy answer | Copies raw markdown from a finished assistant bubble (needs a secure context; may no-op on plain `http://`) |
@@ -192,8 +198,9 @@ cd admin  && pnpm install && pnpm dev
 ## Debug path: curl
 
 Same flow over HTTP. Obtain a token first — companies/documents return
-401 without it. `POST /api/v1/retrieve`, `/chat`, and `/hint` stay
-public (widget path). Full contracts: `docs/02-backend.md`. AI runtime:
+401 without it. `POST /api/v1/retrieve`, `/chat`, `/hint`, and
+`GET /api/v1/companies/{id}/widget-config` stay public (widget path).
+Full contracts: `docs/02-backend.md`. AI runtime:
 `docs/06-ai-layer.md`.
 
 ```bash
@@ -254,9 +261,11 @@ tag.
 
 Widget + Admin + AI layer are in one runnable POC:
 
-- **Admin** — preset-admin JWT, companies, ingest, embed snippet
-- **Widget** — Shadow DOM guide bar, streamed chat, hover hints,
-  chips, walkthroughs, markdown / copy / new chat
+- **Admin** — preset-admin JWT, companies, ingest, embed snippet,
+  starter questions
+- **Widget** — Shadow DOM guide bar, streamed chat, empty-state
+  starter chips, hover hints, chips, walkthroughs, markdown / copy /
+  new chat
 - **Backend** — LangGraph RAG chat (SSE) and cached hover hints
 
 This is still a POC: one admin user, no OCR, no server-side chat

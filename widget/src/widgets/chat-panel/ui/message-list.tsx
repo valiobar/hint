@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { MessageBubble } from '@/entities/message';
 import { renderWithElementChips } from '@/features/locate-element';
+import { SuggestedQuestions } from '@/features/suggested-questions';
 import {
 	parseWalkthroughSteps,
 	WalkthroughStartButton,
@@ -31,6 +32,7 @@ export const MessageList = () => {
 					Ask anything about this app — answers come from
 					the product docs.
 				</p>
+				<SuggestedQuestions />
 			</div>
 		);
 	}

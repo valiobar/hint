@@ -13,6 +13,7 @@ from app.routes.companies import router as companies_router
 from app.routes.deps import require_admin
 from app.routes.documents import router as documents_router
 from app.routes.retrieve import router as retrieve_router
+from app.routes.widget_config import router as widget_config_router
 from app.services.auth_service import AuthService
 
 
@@ -39,6 +40,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(
     companies_router, prefix="/api/v1", dependencies=[Depends(require_admin)]
 )
+app.include_router(widget_config_router, prefix="/api/v1")
 app.include_router(
     documents_router, prefix="/api/v1", dependencies=[Depends(require_admin)]
 )

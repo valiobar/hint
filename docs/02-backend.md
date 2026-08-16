@@ -14,7 +14,8 @@
 repositories never contain business rules:
 
 ```
-routes/        auth.py · companies.py · documents.py · retrieve.py · assist.py · deps.py
+routes/        auth.py · companies.py · widget_config.py · documents.py
+               · retrieve.py · assist.py · deps.py
   └─▶ ai/              llm_factory.py · prompts.py · chat_graph.py · hint_chain.py
   └─▶ services/        auth_service.py · company_service.py · ingestion_service.py
                        · retrieval_service.py · text_extraction.py · hint_cache.py
@@ -38,7 +39,9 @@ Cross-cutting rules:
   `run_in_threadpool` inside `VectorRepository`; no other layer touches the Chroma client.
 - `routes/deps.py` centralizes dependency wiring plus three guards:
   - `require_admin` — 401 unless `Authorization: Bearer` decodes to a `users` row.
-    Applied at router level on companies + documents. Full contract: [`05-auth.md`](05-auth.md).
+    Applied at router level on companies + documents. `GET …/widget-config` lives
+    on a **separate** `widget_config` router (same `/companies` prefix, **no**
+    JWT) so the embed can read starter questions. Full contract: [`05-auth.md`](05-auth.md).
   - `require_company` — 404 `"Unknown company_id"` before any company-scoped work.
   - `require_openai_key` — 503 with an actionable message when `OPENAI_API_KEY` is empty
     (the stack boots without it; ingestion, `/retrieve`, `/chat`, and `/hint` need it).
@@ -48,7 +51,8 @@ Cross-cutting rules:
 Preset admin user, seeded at startup from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (bcrypt,
 idempotent upsert). Login returns a JWT (HS256, default 12 h). Companies and
 documents routers require it; `POST /api/v1/retrieve`, `POST /api/v1/chat`,
-`POST /api/v1/hint`, and `GET /health` do not.
+`POST /api/v1/hint`, `GET /api/v1/companies/{id}/widget-config`, and
+`GET /health` do not.
 
 If `ADMIN_PASSWORD` is empty, seeding is skipped and every login is 401 (fail-closed).
 
@@ -86,8 +90,8 @@ Seeding, TTL, rotation, and the public-`/retrieve` trade-off:
 ## API contracts
 
 All routes are mounted under `/api/v1`. Companies and documents require a bearer
-token (Phase 2). `/auth/login`, `/retrieve`, `/chat`, `/hint`, and `/health`
-are public.
+token (Phase 2), including `PATCH …/widget-config`. `/auth/login`, `/retrieve`,
+`/chat`, `/hint`, `GET /companies/{id}/widget-config`, and `/health` are public.
 
 ### POST /api/v1/companies → 201
 
@@ -98,10 +102,11 @@ Create a company. `company_id` is a generated slug (`cmp_` + 8 hex chars).
 {"name": "Acme Corp"}                  // 1–100 chars
 
 // Response 201
-{"company_id": "cmp_1a2b3c4d", "name": "Acme Corp", "created_at": "2026-08-08T12:00:00Z"}
+{"company_id": "cmp_1a2b3c4d", "name": "Acme Corp", "created_at": "2026-08-08T12:00:00Z", "suggested_questions": []}
 ```
 
 Errors: `401` missing/invalid token · `422` invalid body (empty or >100-char name).
+New companies start with `suggested_questions: []` (no default prompts).
 
 ### GET /api/v1/companies → 200
 
@@ -111,6 +116,43 @@ Errors: `401` missing/invalid token.
 ### GET /api/v1/companies/{company_id} → 200
 
 Fetch one company. Errors: `401` missing/invalid token · `404` `{"detail": "Unknown company_id"}`.
+
+### GET /api/v1/companies/{company_id}/widget-config → 200 (public)
+
+Widget empty-state chips. **No bearer token.** Mounted on `widget_config_router`
+(not the JWT-wrapped `companies_router`) so a later auth change does not
+accidentally lock the embed. Anyone with a `company_id` can read the prompt
+list — same trade-off as public `/chat` / `/hint`.
+
+```json
+{"company_id":"cmp_1a2b3c4d","suggested_questions":["How do I create an invoice?"]}
+```
+
+`suggested_questions` is 0–4 strings (already capped by PATCH). Empty list is
+valid — the widget keeps the empty-state sentence and renders no chips.
+
+Errors: `404` `{"detail":"Unknown company_id"}`. No bearer token.
+
+v2 (generate from the knowledge base + page headings) is **not** built.
+
+### PATCH /api/v1/companies/{company_id}/widget-config → 200 (bearer)
+
+Replace the company's starter questions. Admin editor calls this.
+
+```json
+// Request
+{"suggested_questions":["How do I create an invoice?","How do I export a report?"]}
+
+// Response 200 — full Company including suggested_questions
+{"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"2026-08-08T12:00:00Z","suggested_questions":["How do I create an invoice?","How do I export a report?"]}
+```
+
+Caps (422 if violated): 0–4 items; each 1–120 characters after trim; blank
+entries rejected. `[]` clears chips (visible on the host after reload — the
+widget caches in memory for the page lifetime).
+
+Errors: `401` · `404` unknown id · `422` more than 4 items, blank
+entries, or an item longer than 120 characters.
 
 ### POST /api/v1/companies/{company_id}/documents → 201
 
@@ -340,7 +382,7 @@ delete the failed record.
 
 | Collection  | Document shape                                                        | Indexes |
 |-------------|-----------------------------------------------------------------------|---------|
-| `companies` | `{company_id, name, created_at}`                                      | `company_id` **unique** |
+| `companies` | `{company_id, name, created_at, suggested_questions}`                  | `company_id` **unique** |
 | `documents` | `{document_id, company_id, filename, size_bytes, chunk_count, status, error, created_at}` | `document_id` **unique** · `company_id` |
 | `users`     | `{email, password_hash, created_at}`                                  | `email` **unique** |
 
@@ -383,7 +425,21 @@ curl -s localhost:8000/api/v1/companies
 curl -s -X POST localhost:8000/api/v1/companies \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"name": "Acme Corp"}'
-# → {"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"…"}
+# → {"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"…","suggested_questions":[]}
+
+# 1b. public widget-config (no token) — empty until PATCH
+curl -s localhost:8000/api/v1/companies/cmp_1a2b3c4d/widget-config
+# → {"company_id":"cmp_1a2b3c4d","suggested_questions":[]}
+
+# 1c. set starter questions (bearer)
+curl -s -X PATCH localhost:8000/api/v1/companies/cmp_1a2b3c4d/widget-config \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"suggested_questions":["How do I create an invoice?","How do I export a report?"]}'
+# → Company with suggested_questions set
+
+curl -s localhost:8000/api/v1/companies/cmp_1a2b3c4d/widget-config
+# → {"company_id":"cmp_1a2b3c4d","suggested_questions":["How do I create an invoice?",…]}
 
 # 2. upload documents (multi-file; use the company_id from step 1)
 curl -s -X POST "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
@@ -484,6 +540,8 @@ in-memory fakes; no Mongo/Chroma/network needed):
 | `test_hint_cache.py` | Key stability across query-string URLs; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query build; 140-char clamp; `source: null` on empty KB |
 | `test_chat_graph.py` | Single message skips condense; retrieval `(company_id, query, 5)`; answer produced |
+| `test_company_models.py` | Widget-config caps (blank / >120 chars / >4 items) and trim |
+| `test_widget_config_routes.py` | Public GET 200/404; PATCH without token is 401 |
 
 ```bash
 cd backend && pip install -r requirements-dev.txt && python -m pytest tests/ -v

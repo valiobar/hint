@@ -2,6 +2,7 @@ export interface Company {
 	company_id: string;
 	name: string;
 	created_at: string;
+	suggested_questions: string[];
 }
 
 export type DocumentStatus = 'processing' | 'ready' | 'failed';

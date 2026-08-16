@@ -44,6 +44,11 @@ export interface HintResponse {
 	source: string | null;
 }
 
+export interface WidgetConfigResponse {
+	company_id: string;
+	suggested_questions: string[];
+}
+
 // Backend Pydantic caps — trim client-side, never rely on a 422
 export const MAX_MESSAGES = 30;
 export const MAX_MESSAGE_CHARS = 4000;
