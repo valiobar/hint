@@ -1,0 +1,126 @@
+.panel {
+	box-sizing: border-box;
+	position: fixed;
+	top: 50%;
+	right: calc(2.25rem + var(--hint-space-2) * 3);
+	transform: translateY(-50%);
+	display: flex;
+	flex-direction: column;
+	inline-size: min(22rem, calc(100vw - 4.5rem));
+	block-size: min(36rem, 80vh);
+	overflow: hidden;
+	background: var(--hint-surface);
+	border: 1px solid var(--hint-border);
+	border-radius: var(--hint-radius-lg);
+	box-shadow: var(--hint-shadow);
+	font-family: var(--hint-font);
+	color: var(--hint-text);
+	transform-origin: right center;
+	animation: slideIn var(--hint-duration-slow) var(--hint-ease);
+}
+
+.closing {
+	animation: slideOut var(--hint-duration-base) ease-in forwards;
+}
+
+@keyframes slideIn {
+	from {
+		opacity: 0;
+		transform: translateY(-50%) translateX(0.75rem) scale(0.98);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(-50%) translateX(0) scale(1);
+	}
+}
+
+@keyframes slideOut {
+	from {
+		opacity: 1;
+		transform: translateY(-50%) translateX(0) scale(1);
+	}
+
+	to {
+		opacity: 0;
+		transform: translateY(-50%) translateX(0.75rem) scale(0.98);
+	}
+}
+
+.header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--hint-space-2);
+	padding: var(--hint-space-3) var(--hint-space-4);
+	border-bottom: 1px solid var(--hint-border);
+}
+
+.title {
+	font-size: 0.95rem;
+	font-weight: 600;
+}
+
+.header button {
+	display: grid;
+	place-items: center;
+	padding: var(--hint-space-1);
+	border: none;
+	border-radius: var(--hint-radius-sm);
+	background: transparent;
+	color: var(--hint-text-muted);
+	cursor: pointer;
+	transition:
+		background var(--hint-duration-fast) var(--hint-ease),
+		color var(--hint-duration-fast) var(--hint-ease);
+}
+
+.header button svg {
+	transition: transform var(--hint-duration-base) var(--hint-ease);
+}
+
+.header button:hover {
+	background: var(--hint-accent-soft);
+	color: var(--hint-accent);
+}
+
+.header button:hover svg {
+	transform: rotate(90deg);
+}
+
+.header button:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.empty {
+	flex: 1;
+	display: grid;
+	place-items: center;
+	padding: var(--hint-space-4);
+	color: var(--hint-text-muted);
+	font-size: 0.85rem;
+	line-height: 1.45;
+	text-align: center;
+}
+
+.empty p {
+	margin: 0;
+}
+
+.list {
+	flex: 1;
+	min-block-size: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--hint-space-2);
+	padding: var(--hint-space-3);
+	overflow-y: auto;
+}
+
+.error {
+	margin: 0;
+	padding: var(--hint-space-2) var(--hint-space-4);
+	color: var(--hint-danger);
+	font-size: 0.8rem;
+}

@@ -1,8 +1,17 @@
 from datetime import datetime, timezone
+from itertools import cycle
 
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 
+from app.models.assist import (
+    ChatMessage,
+    ElementDescriptor,
+    HintRequest,
+    PageContext,
+)
 from app.models.document import DocumentMeta
+from app.models.retrieval import Chunk
 
 
 @pytest.fixture
@@ -90,3 +99,73 @@ class FakeVectorRepository:
         self, company_id: str, document_id: str
     ) -> None:
         self.deleted.append((company_id, document_id))
+
+
+class FakeRetrievalService:
+    def __init__(self, chunks: list[Chunk] | None = None):
+        self.chunks = chunks or []
+        self.calls: list[tuple[str, str, int]] = []
+
+    async def retrieve(
+        self, company_id: str, query: str, k: int = 5
+    ) -> list[Chunk]:
+        self.calls.append((company_id, query, k))
+        return self.chunks
+
+
+def make_fake_llm(*replies: str) -> GenericFakeChatModel:
+    return GenericFakeChatModel(messages=cycle(replies))
+
+
+def make_page_context(
+    *,
+    url: str = "https://app.acme.com/reports",
+    title: str = "Reports",
+    interactive: list[ElementDescriptor] | None = None,
+    visible_text_excerpt: str = "Monthly reports overview",
+) -> PageContext:
+    return PageContext(
+        url=url,
+        title=title,
+        headings=["Reports"],
+        interactive=interactive or [],
+        visible_text_excerpt=visible_text_excerpt,
+    )
+
+
+def make_hint_request(
+    *,
+    company_id: str = "cmp_test0001",
+    url: str = "https://app.acme.com/reports",
+    text: str | None = "Export report",
+    attrs: dict[str, str] | None = None,
+    selector_path: str = "main > button#export-report",
+) -> HintRequest:
+    return HintRequest(
+        company_id=company_id,
+        element=ElementDescriptor(
+            tag="button",
+            text=text,
+            role="button",
+            attrs=attrs or {"id": "export-report"},
+            selector_path=selector_path,
+        ),
+        page_context=make_page_context(url=url),
+    )
+
+
+def make_chat_state(
+    *,
+    question: str = "how do I export?",
+    messages: list[ChatMessage] | None = None,
+) -> dict:
+    return {
+        "company_id": "cmp_test0001",
+        "company_name": "Acme Corp",
+        "messages": messages
+        or [ChatMessage(role="user", content=question)],
+        "page_context": make_page_context(),
+        "query": "",
+        "chunks": [],
+        "answer": "",
+    }

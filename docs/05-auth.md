@@ -5,8 +5,9 @@
 > [`02-backend.md`](02-backend.md).
 
 Admin companies/documents routes require a bearer token. Widget-facing
-`POST /api/v1/retrieve` and `GET /health` stay public so the embed keeps working
-without credentials.
+`POST /api/v1/retrieve`, `POST /api/v1/chat`, `POST /api/v1/hint`, and
+`GET /health` stay public so the embed keeps working without credentials.
+Chat/hint contracts: [`06-ai-layer.md`](06-ai-layer.md).
 
 ## Model
 
@@ -148,6 +149,8 @@ depends on `require_admin` in-handler.
 | `GET /api/v1/companies/{id}` | bearer | Operator-only (unused by the SPA) |
 | `GET/POST/DELETE /api/v1/companies/{id}/documents…` | bearer | Operator-only |
 | `POST /api/v1/retrieve` | **public** | Widget calls this from arbitrary customer origins with no credentials. Company-scoped chunks are world-readable by `company_id`. Locking this down needs public API keys (Phase 6), not admin auth. |
+| `POST /api/v1/chat` | **public** | Widget chat (SSE). Anyone with a `company_id` can spend that company's LLM tokens. Same Phase 6 hardening item. |
+| `POST /api/v1/hint` | **public** | Widget hover hints (JSON + in-process cache). Same token-spend trade-off as `/chat`. |
 | `GET /health` | **public** | Compose healthcheck + admin badge |
 
 ## Environment variables
@@ -208,8 +211,8 @@ The second tab keeps its in-memory `isAuthenticated` until its next 401.
 - **No refresh token.** One access token (12 h default) instead of the 30 min +
   7 day pair in the workspace security rule. A refresh endpoint is unjustified
   for a one-operator panel.
-- **Public `/retrieve`.** See the route table. Admin auth does not protect
-  knowledge-base reads by `company_id`.
+- **Public `/retrieve`, `/chat`, `/hint`.** See the route table. Admin auth
+  does not protect knowledge-base reads or LLM spend by `company_id`.
 - **No rate limit** on `/login`. Brute-force is in scope for Phase 6.
 - **CORS `*`** still applies, including to `/auth/login`. Fine for the POC;
   tighten with the widget origin list later if the admin is ever exposed.

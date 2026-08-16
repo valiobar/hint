@@ -1,13 +1,15 @@
 # Hint — Architecture Overview
 
-> **Status: Phase 2 (admin panel + preset-admin auth) complete.**
-> Backend API contracts: [`02-backend.md`](02-backend.md). Admin SPA:
+> **Status: Phase 3 (AI layer) complete.**
+> Backend API contracts: [`02-backend.md`](02-backend.md). AI runtime
+> (LangGraph chat + hints): [`06-ai-layer.md`](06-ai-layer.md). Admin SPA:
 > [`04-admin.md`](04-admin.md). Auth contract: [`05-auth.md`](05-auth.md).
-> Remaining docs — `03-widget.md` and chat/hint API contracts — land in
-> Phases 3–5 per `plans/hint_poc_implementation.md`.
+> Remaining docs — `03-widget.md` (reserved for the Phase 4 widget) — land in
+> Phases 4–5 per `plans/hint_poc_implementation.md`.
 
 Hint is a browser-first AI guidance layer for SaaS web apps: an embeddable React
-widget (chat + hover hints, arriving in Phases 3–5) backed by a FastAPI RAG backend.
+widget (UI in Phases 4–5) backed by a FastAPI RAG backend whose chat/hint APIs
+are live as of Phase 3.
 A SaaS company uploads its product docs through an admin panel, then adds a single
 `<script>` tag to its app; the widget answers "how do I …?" questions grounded in
 those docs plus the current page context.
@@ -16,7 +18,7 @@ those docs plus the current page context.
 
 | Service      | Tech                              | Port (host) | Purpose                                                  |
 |--------------|-----------------------------------|-------------|----------------------------------------------------------|
-| `backend`    | Python 3.12, FastAPI, uvicorn     | 8000        | API: auth, companies, document ingestion, retrieval ([`02-backend.md`](02-backend.md), [`05-auth.md`](05-auth.md)); chat/hints in Phase 3 |
+| `backend`    | Python 3.12, FastAPI, uvicorn     | 8000        | API: auth, companies, document ingestion, retrieval, chat (SSE), hints ([`02-backend.md`](02-backend.md), [`05-auth.md`](05-auth.md), [`06-ai-layer.md`](06-ai-layer.md)) |
 | `mongo`      | `mongo:7`                         | —           | `companies`, `documents` metadata, `users` (preset admin) |
 | `chromadb`   | `chromadb/chroma:0.5.23`          | —           | Per-company vector collections `kb_{company_id}`          |
 | `admin`      | React 18 + Vite + TS → nginx      | 3001        | Full admin panel: login, companies, upload, snippet ([`04-admin.md`](04-admin.md)) |
@@ -30,9 +32,10 @@ there is no conflict.
 
 ## Request flow
 
-What works today (Phase 2 — the admin SPA is the primary operator path; curl is
+What works today (Phase 3 — the admin SPA is the primary operator path; curl is
 the debug path). Admin companies/documents calls carry
-`Authorization: Bearer <jwt>`. `/retrieve` and `/health` stay public for the widget.
+`Authorization: Bearer <jwt>`. `/retrieve`, `/chat`, `/hint`, and `/health`
+stay public for the widget.
 
 ```
 Admin SPA (:3001) — see 04-admin.md / 05-auth.md:
@@ -43,23 +46,26 @@ Admin SPA (:3001) — see 04-admin.md / 05-auth.md:
                                                           └─▶ MongoDB (documents metadata: processing → ready | failed)
   GET /health (no token) ────────────────────▶ backend ──▶ ping Mongo + Chroma
 
-Widget path (public — no token):
-  POST /api/v1/retrieve ─────────────────────▶ backend ──▶ Chroma query (kb_{id}) → top-k chunks {text, filename, score}
+Widget path (public — no token; live as of Phase 3):
+  POST /api/v1/retrieve ─────────────────────▶ backend ──▶ Chroma query (kb_{id}) → top-k chunks
+  POST /api/v1/chat     (SSE) ───────────────▶ backend ──▶ LangGraph (condense → retrieve k=5 → answer)
+  POST /api/v1/hint     (JSON) ──────────────▶ backend ──▶ retrieve k=3 → 1 LLM call → clamp 140 chars
+                                                          └─ in-process TTL cache (sha1 key)
 
-Widget (Phase 0 placeholder):
+Widget (Phase 0 placeholder — UI in Phase 4):
   Browser (demo page :3002)
     └─▶ <script src="http://localhost:1337/embed/v1/loader.js" data-hint-company-id=…>
           └─▶ loader.js: singleton guard → window.__HINT__ → injects hint-widget.js
                 └─▶ widget bundle: #hint-root + open Shadow DOM → placeholder badge
 ```
 
-Target end-user flow (from the master plan; built out in Phases 3–5):
+Target end-user flow (backend half is live; widget UI in Phases 4–5):
 
 ```
 host page <script src=".../loader.js" data-hint-company-id="abc"> (singleton guard)
   └─▶ widget bundle → Shadow DOM mount
-       ├─ chat:  POST /api/v1/chat  (SSE stream)   { company_id, messages, page_context }
-       └─ hint:  POST /api/v1/hint  (JSON)         { company_id, element, page_context }
+       ├─ chat:  POST /api/v1/chat  (SSE stream)   { company_id, messages, page_context }   ← live
+       └─ hint:  POST /api/v1/hint  (JSON)         { company_id, element, page_context }   ← live
                      backend: LangGraph → Chroma retrieval (filtered by company) → LLM → response
 ```
 
@@ -91,8 +97,11 @@ env vars and `.env` for local non-Docker runs). Template: `.env.example`.
 | `MONGODB_DB_NAME` | `hint`                           | `hint`                            | backend     |
 | `CHROMA_HOST`     | `localhost`                         | `chromadb`                           | backend     |
 | `CHROMA_PORT`     | `8000`                              | `8000`                               | backend     |
-| `OPENAI_API_KEY`  | `""` — empty still allows boot      | `${OPENAI_API_KEY:-}` from `.env`    | backend — **required** for document upload and `/retrieve` (503 without it) |
-| `LLM_MODEL`       | `gpt-4o-mini`                       | `${LLM_MODEL:-gpt-4o-mini}`          | backend (Phase 3) |
+| `OPENAI_API_KEY`  | `""` — empty still allows boot      | `${OPENAI_API_KEY:-}` from `.env`    | backend — **required** for upload, `/retrieve`, `/chat`, `/hint` (503 without it) |
+| `LLM_PROVIDER`    | `openai`                            | not overridden (code default)        | backend — `create_chat_llm`; unknown value raises at first LLM call |
+| `LLM_MODEL`       | `gpt-4o-mini`                       | `${LLM_MODEL:-gpt-4o-mini}`          | backend chat / hint model |
+| `HINT_CACHE_TTL_SECONDS` | `3600`                       | not overridden (code default)        | backend in-process hint cache TTL |
+| `HINT_CACHE_MAX_ENTRIES` | `1024`                       | not overridden (code default)        | backend hint cache cap (oldest-first eviction) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small`            | `${EMBEDDING_MODEL:-…}`              | backend (Phase 1) |
 | `CORS_ORIGINS`    | `["*"]` (POC: widget runs on arbitrary customer origins) | not overridden | backend |
 | `JWT_SECRET`      | `dev-insecure-secret-change-me` | `${JWT_SECRET:-dev-insecure-secret-change-me}` | backend — change before any shared stack; see [`05-auth.md`](05-auth.md) |
@@ -131,17 +140,19 @@ Admin build-time variables (Vite, baked into the bundle via Docker build args in
 ## Backend layering
 
 `backend/app/` follows `routes/ → services/ → repositories/ → models/` (top-down only).
-As of Phase 2 the layers include auth (`routes/auth.py`, `services/auth_service.py`,
-`repositories/user_repo.py`, `models/user.py`) plus companies, documents, and retrieve.
-Companies/documents routers take `require_admin`; `/retrieve` and `/health` stay public.
-`ai/` remains reserved for Phase 3 (LangGraph). Full inventory:
-[`02-backend.md`](02-backend.md), [`05-auth.md`](05-auth.md).
+`ai/` sits beside `services/`: routes call `ai/` entry points, `ai/` calls
+`RetrievalService`. As of Phase 3 the layers include auth, companies, documents,
+retrieve, and assist (`routes/assist.py`, `ai/chat_graph.py`, `ai/hint_chain.py`,
+`services/hint_cache.py`, `models/assist.py`). Companies/documents routers take
+`require_admin`; `/retrieve`, `/chat`, `/hint`, and `/health` stay public.
+Full inventory: [`02-backend.md`](02-backend.md), [`05-auth.md`](05-auth.md),
+[`06-ai-layer.md`](06-ai-layer.md).
 
 ## Running the stack
 
 ```bash
 cp .env.example .env
-# set OPENAI_API_KEY (upload/retrieve) and ADMIN_PASSWORD (admin login) — both required
+# set OPENAI_API_KEY (upload / retrieve / chat / hint) and ADMIN_PASSWORD (admin login)
 docker compose up --build
 
 curl -s http://localhost:8000/health
@@ -152,8 +163,10 @@ open http://localhost:3002    # demo page, one Hint badge bottom-right
 ```
 
 Primary operator walkthrough: [`04-admin.md`](04-admin.md) and the README.
-Curl/debug path (login first, then bearer on admin routes):
+Curl/debug path (login first, then bearer on admin routes; chat/hint are public
+and need a real `OPENAI_API_KEY`):
 [`02-backend.md`](02-backend.md#end-to-end-curl-walkthrough).
+AI runtime: [`06-ai-layer.md`](06-ai-layer.md).
 
 Common failure modes:
 

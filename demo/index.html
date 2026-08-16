@@ -6,65 +6,1273 @@
   <title>Acme Invoicing — Demo Host</title>
   <style>
     /* Intentionally aggressive host styles — widget must survive via Shadow DOM */
+    :root {
+      --ink: #1a202c;
+      --muted: #4a5568;
+      --line: #cbd5e0;
+      --navy: #1a365d;
+      --sky: #bee3f8;
+      --panel: #edf2f7;
+      --ok: #276749;
+      --warn: #975a16;
+      --danger: #9b2c2c;
+      --surface: #ffffff;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Georgia, "Times New Roman", serif;
       background: #f0f4f8;
-      color: #1a202c;
+      color: var(--ink);
+      line-height: 1.45;
     }
-    nav {
+    a { color: #2b6cb0; }
+    header.app-bar {
       display: flex;
-      gap: 1.5rem;
-      padding: 1rem 1.5rem;
-      background: #1a365d;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.85rem 1.5rem;
+      background: var(--navy);
+      color: #fff;
     }
-    nav a {
-      color: #bee3f8;
+    header.app-bar .brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    header.app-bar .meta {
+      font-size: 0.85rem;
+      color: var(--sky);
+    }
+    nav.top-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      padding: 0.5rem 1.5rem;
+      background: #2a4365;
+    }
+    nav.top-nav a,
+    nav.top-nav button.nav-tab {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--sky);
       text-decoration: none;
+      font: inherit;
+      font-size: 0.92rem;
+      padding: 0.45rem 0.8rem;
+      cursor: pointer;
+      border-radius: 0.25rem;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav button.nav-tab:hover,
+    nav.top-nav button.nav-tab[aria-selected="true"] {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+      gap: 1.25rem;
+      padding: 1.25rem 1.5rem 2.5rem;
+      max-width: 72rem;
+      margin: 0 auto;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    main { min-width: 0; }
+    aside.activity {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 0.85rem;
+      align-self: start;
+      position: sticky;
+      top: 0.75rem;
+      max-height: calc(100vh - 1.5rem);
+      overflow: auto;
+    }
+    aside.activity h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+    }
+    #activity-log {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    #activity-log li {
+      padding: 0.35rem 0;
+      border-bottom: 1px dotted var(--line);
+    }
+    #activity-log li:first-child { color: var(--ink); font-weight: 600; }
+    .howto {
+      margin: 0 0 1.25rem;
+      padding: 0.85rem 1rem;
+      background: #ebf8ff;
+      border: 1px solid #90cdf4;
       font-size: 0.95rem;
     }
-    main {
-      padding: 2rem 1.5rem;
-      max-width: 40rem;
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 1rem 1.1rem 1.15rem;
+      margin: 0 0 1.1rem;
     }
-    h1 {
-      margin: 0 0 1.25rem;
-      font-size: 1.75rem;
+    .panel h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.2rem;
     }
-    button, input {
+    .panel h3 {
+      margin: 1rem 0 0.5rem;
+      font-size: 1.02rem;
+    }
+    .panel[hidden] { display: none !important; }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: flex-end;
+      margin-bottom: 0.75rem;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 10rem;
+      flex: 1 1 10rem;
+    }
+    .field.narrow { flex: 0 1 8rem; min-width: 7rem; }
+    .field.wide { flex: 1 1 100%; }
+    label, .label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    button, input, select, textarea {
       font: inherit;
-      padding: 0.5rem 0.75rem;
-      margin: 0.35rem 0.35rem 0.35rem 0;
     }
-    form {
-      margin-top: 1.25rem;
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    select, textarea {
+      padding: 0.45rem 0.55rem;
+      border: 1px solid #a0aec0;
+      background: #fff;
+      width: 100%;
+    }
+    textarea { min-height: 4.5rem; resize: vertical; }
+    button, .btn-like {
+      padding: 0.45rem 0.8rem;
+      border: 1px solid #2c5282;
+      background: #2b6cb0;
+      color: #fff;
+      cursor: pointer;
+    }
+    button.secondary, .btn-like.secondary {
+      background: #edf2f7;
+      color: var(--ink);
+      border-color: #a0aec0;
+    }
+    button.danger {
+      background: #c53030;
+      border-color: #9b2c2c;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .checks, .radios {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin: 0.35rem 0 0.75rem;
+    }
+    .checks label, .radios label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--ink);
+      font-size: 0.95rem;
+    }
+    table.invoices {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    table.invoices th,
+    table.invoices td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      padding: 0.45rem 0.35rem;
+    }
+    table.invoices th { color: var(--muted); font-weight: 600; }
+    .status {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border: 1px solid currentColor;
+      font-size: 0.78rem;
+    }
+    .status.draft { color: var(--muted); }
+    .status.sent { color: #2b6cb0; }
+    .status.paid { color: var(--ok); }
+    .status.overdue { color: var(--danger); }
+    .toolbar {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
       align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .toolbar .spacer { flex: 1; }
+    .progress-wrap {
+      width: 100%;
+      height: 0.65rem;
+      background: #e2e8f0;
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+    #export-progress {
+      height: 100%;
+      width: 0%;
+      background: #3182ce;
+      transition: width 0.15s linear;
+    }
+    .meter-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0.35rem 0 0.75rem;
+    }
+    .pill-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+    .pill-tabs [role="tab"] {
+      border: 1px solid #a0aec0;
+      background: #edf2f7;
+      color: var(--ink);
+      padding: 0.35rem 0.7rem;
+      cursor: pointer;
+    }
+    .pill-tabs [role="tab"][aria-selected="true"] {
+      background: #2b6cb0;
+      border-color: #2c5282;
+      color: #fff;
+    }
+    .menu {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 0.35rem;
+      min-width: 11rem;
+    }
+    .menu [role="menuitem"] {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 0.4rem 0.55rem;
+      cursor: pointer;
+      font: inherit;
+      color: var(--ink);
+    }
+    .menu [role="menuitem"]:hover {
+      background: #ebf8ff;
+    }
+    .toast {
+      position: fixed;
+      left: 1rem;
+      bottom: 1rem;
+      max-width: min(24rem, calc(100vw - 2rem));
+      background: #1a202c;
+      color: #fff;
+      padding: 0.75rem 1rem;
+      font-size: 0.92rem;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .toast[hidden] { display: none !important; }
+    .banner {
+      padding: 0.65rem 0.85rem;
+      margin-bottom: 0.85rem;
+      border: 1px solid #f6e05e;
+      background: #fffff0;
+      color: var(--warn);
+      font-size: 0.92rem;
+    }
+    .banner[hidden] { display: none !important; }
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+    @media (max-width: 700px) {
+      .split { grid-template-columns: 1fr; }
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 0.85rem;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 0.65rem 0.75rem;
+    }
+    .stat .n {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+    .stat .t {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    details.help {
+      margin: 0.5rem 0 0;
+      font-size: 0.9rem;
+    }
+    footer.page-foot {
+      padding: 0.75rem 1.5rem 1.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+    }
+    .range-row input[type="range"] { flex: 1; }
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+    #theme-swatch {
+      width: 2rem;
+      height: 2rem;
+      border: 1px solid var(--line);
+      background: #2b6cb0;
+    }
+    .file-name {
+      font-size: 0.85rem;
+      color: var(--muted);
     }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="#">Invoices</a>
-    <a href="#">Reports</a>
-    <a href="#">Settings</a>
-  </nav>
-  <main>
-    <h1>Invoices</h1>
-    <button id="export-report" type="button">Export report</button>
-    <form>
-      <input name="customer" placeholder="Customer name">
-      <button type="submit">Create invoice</button>
-    </form>
-  </main>
+  <header class="app-bar">
+    <div class="brand">Acme Invoicing</div>
+    <div class="meta">
+      Demo host for Hint ·
+      <span id="clock">--:--:--</span> ·
+      Workspace <strong id="workspace-label">Sandbox</strong>
+    </div>
+  </header>
 
-  <script src="http://localhost:1337/embed/v1/loader.js"
-          data-hint-company-id="cmp_demo0001"
-          data-hint-api-url="http://localhost:8000" defer></script>
-  <!-- duplicate on purpose: must be a no-op (singleton guard) -->
-  <script src="http://localhost:1337/embed/v1/loader.js"
-          data-hint-company-id="cmp_other" defer></script>
+  <nav class="top-nav" aria-label="Primary">
+    <button type="button" class="nav-tab" role="tab" id="tab-invoices"
+            aria-selected="true" data-panel="panel-invoices">Invoices</button>
+    <button type="button" class="nav-tab" role="tab" id="tab-customers"
+            aria-selected="false" data-panel="panel-customers">Customers</button>
+    <button type="button" class="nav-tab" role="tab" id="tab-reports"
+            aria-selected="false" data-panel="panel-reports">Reports</button>
+    <button type="button" class="nav-tab" role="tab" id="tab-settings"
+            aria-selected="false" data-panel="panel-settings">Settings</button>
+    <a href="#activity-log" id="nav-activity">Activity</a>
+    <a href="USER_MANUAL.md" id="nav-manual" target="_blank" rel="noopener">User manual</a>
+    <a href="ADMIN_USER_MANUAL.md" id="nav-admin-manual" target="_blank" rel="noopener">Admin manual</a>
+  </nav>
+
+  <div class="layout">
+    <main>
+      <p class="howto">
+        This page is a fake SaaS host for the Hint widget. Toggle the lightbulb on
+        the Hint bar, then hover controls (e.g. <strong>Export report</strong>) for
+        about half a second. Full walkthrough:
+        <a href="USER_MANUAL.md" target="_blank" rel="noopener">demo/USER_MANUAL.md</a>.
+        Override company with <code>?company_id=cmp_…</code> after creating one in admin.
+      </p>
+
+      <div id="global-banner" class="banner" hidden role="status"></div>
+
+      <!-- INVOICES -->
+      <section class="panel" id="panel-invoices" aria-labelledby="invoices-heading">
+        <h2 id="invoices-heading">Invoices</h2>
+
+        <div class="stats" aria-live="polite">
+          <div class="stat">
+            <div class="n" id="stat-total">3</div>
+            <div class="t">Total invoices</div>
+          </div>
+          <div class="stat">
+            <div class="n" id="stat-open">2</div>
+            <div class="t">Open balance</div>
+          </div>
+          <div class="stat">
+            <div class="n" id="stat-paid">1</div>
+            <div class="t">Paid</div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <label class="field narrow" for="invoice-search">
+            Search
+            <input id="invoice-search" type="search" name="q"
+                   placeholder="Customer or #INV" autocomplete="off">
+          </label>
+          <label class="field narrow" for="status-filter">
+            Status
+            <select id="status-filter" name="status">
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </label>
+          <div class="spacer"></div>
+          <button type="button" id="btn-refresh-table" class="secondary">
+            Refresh list
+          </button>
+          <button type="button" id="export-report">Export report</button>
+        </div>
+
+        <div class="meter-label">
+          Export progress: <span id="export-pct">0%</span>
+        </div>
+        <div class="progress-wrap" aria-hidden="true">
+          <div id="export-progress"></div>
+        </div>
+
+        <table class="invoices" id="invoice-table">
+          <thead>
+            <tr>
+              <th scope="col">Invoice</th>
+              <th scope="col">Customer</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-tbody"></tbody>
+        </table>
+
+        <h3>Create invoice</h3>
+        <form id="create-invoice-form" novalidate>
+          <div class="row">
+            <label class="field" for="customer-name">
+              Customer name
+              <input id="customer-name" name="customer" type="text"
+                     placeholder="Acme Retail" required maxlength="80">
+            </label>
+            <label class="field" for="customer-email">
+              Billing email
+              <input id="customer-email" name="email" type="email"
+                     placeholder="billing@example.com">
+            </label>
+          </div>
+          <div class="row">
+            <label class="field narrow" for="invoice-amount">
+              Amount
+              <input id="invoice-amount" name="amount" type="number"
+                     min="0" step="0.01" placeholder="120.00" required>
+            </label>
+            <label class="field narrow" for="invoice-currency">
+              Currency
+              <select id="invoice-currency" name="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="BGN">BGN</option>
+              </select>
+            </label>
+            <label class="field narrow" for="due-date">
+              Due date
+              <input id="due-date" name="due" type="date">
+            </label>
+            <label class="field narrow" for="invoice-priority">
+              Priority
+              <select id="invoice-priority" name="priority">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field wide" for="invoice-notes">
+              Notes
+              <textarea id="invoice-notes" name="notes"
+                        placeholder="Payment terms, PO number, …"></textarea>
+            </label>
+          </div>
+
+          <div class="label">Delivery options</div>
+          <div class="checks">
+            <label>
+              <input type="checkbox" id="opt-email" name="deliver_email" checked>
+              Email customer
+            </label>
+            <label>
+              <input type="checkbox" id="opt-sms" name="deliver_sms">
+              SMS reminder
+            </label>
+            <label>
+              <input type="checkbox" id="opt-pdf" name="attach_pdf" checked>
+              Attach PDF
+            </label>
+          </div>
+
+          <div class="label">Payment terms</div>
+          <div class="radios">
+            <label>
+              <input type="radio" name="terms" value="net15" checked>
+              Net 15
+            </label>
+            <label>
+              <input type="radio" name="terms" value="net30">
+              Net 30
+            </label>
+            <label>
+              <input type="radio" name="terms" value="due_on_receipt">
+              Due on receipt
+            </label>
+          </div>
+
+          <div class="toolbar">
+            <button type="submit" id="btn-create-invoice">Create invoice</button>
+            <button type="reset" id="btn-reset-invoice" class="secondary">
+              Clear form
+            </button>
+            <button type="button" id="btn-save-draft" class="secondary">
+              Save as draft
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- CUSTOMERS -->
+      <section class="panel" id="panel-customers" hidden aria-labelledby="customers-heading">
+        <h2 id="customers-heading">Customers</h2>
+        <form id="customer-form">
+          <div class="row">
+            <label class="field" for="cust-company">
+              Company
+              <input id="cust-company" name="company" type="text"
+                     placeholder="Northwind Traders" required>
+            </label>
+            <label class="field" for="cust-phone">
+              Phone
+              <input id="cust-phone" name="phone" type="tel"
+                     placeholder="+1 555 0100">
+            </label>
+            <label class="field narrow" for="cust-country">
+              Country
+              <select id="cust-country" name="country">
+                <option value="US">United States</option>
+                <option value="BG">Bulgaria</option>
+                <option value="DE">Germany</option>
+                <option value="GB">United Kingdom</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label class="field" for="cust-website">
+              Website
+              <input id="cust-website" name="website" type="url"
+                     placeholder="https://example.com">
+            </label>
+            <label class="field narrow" for="cust-tier">
+              Tier
+              <select id="cust-tier" name="tier" multiple size="3"
+                      aria-label="Customer tier (multi-select)">
+                <option value="starter" selected>Starter</option>
+                <option value="growth">Growth</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </label>
+          </div>
+          <div class="toolbar">
+            <button type="submit" id="btn-add-customer">Add customer</button>
+            <button type="button" id="btn-import-customers" class="secondary">
+              Import CSV (fake)
+            </button>
+          </div>
+        </form>
+        <ul id="customer-list" aria-live="polite"></ul>
+      </section>
+
+      <!-- REPORTS -->
+      <section class="panel" id="panel-reports" hidden aria-labelledby="reports-heading">
+        <h2 id="reports-heading">Reports</h2>
+
+        <div class="pill-tabs" role="tablist" aria-label="Report type">
+          <button type="button" role="tab" id="report-tab-revenue"
+                  aria-selected="true" data-report="revenue">Revenue</button>
+          <button type="button" role="tab" id="report-tab-aging"
+                  aria-selected="false" data-report="aging">Aging</button>
+          <button type="button" role="tab" id="report-tab-tax"
+                  aria-selected="false" data-report="tax">Tax summary</button>
+        </div>
+
+        <div id="report-pane" class="banner" style="border-color:#90cdf4;background:#ebf8ff;color:#1a365d;">
+          Revenue report: last 30 days · $4,280 collected (demo data).
+        </div>
+
+        <div class="split">
+          <div>
+            <h3>Schedule</h3>
+            <label class="field" for="report-freq">
+              Frequency
+              <select id="report-freq" name="freq">
+                <option value="daily">Daily</option>
+                <option value="weekly" selected>Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <label class="field" for="report-time" style="margin-top:0.5rem;">
+              Send at
+              <input id="report-time" name="time" type="time" value="09:00">
+            </label>
+            <div class="toolbar" style="margin-top:0.75rem;">
+              <button type="button" id="btn-schedule-report">Save schedule</button>
+              <button type="button" id="btn-run-report-now" class="secondary">
+                Run now
+              </button>
+            </div>
+          </div>
+          <div>
+            <h3>Quick actions</h3>
+            <div class="menu" role="menu" aria-label="Report actions">
+              <button type="button" role="menuitem" id="menu-pdf">
+                Download PDF
+              </button>
+              <button type="button" role="menuitem" id="menu-csv">
+                Download CSV
+              </button>
+              <button type="button" role="menuitem" id="menu-share">
+                Copy share link
+              </button>
+              <button type="button" role="menuitem" id="menu-email">
+                Email to me
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="panel" id="panel-settings" hidden aria-labelledby="settings-heading">
+        <h2 id="settings-heading">Settings</h2>
+
+        <h3>Workspace</h3>
+        <div class="row">
+          <label class="field" for="workspace-name">
+            Workspace name
+            <input id="workspace-name" name="workspace" type="text"
+                   value="Sandbox" maxlength="40">
+          </label>
+          <label class="field narrow" for="locale">
+            Locale
+            <select id="locale" name="locale">
+              <option value="en-US" selected>English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="bg-BG">Bulgarian</option>
+              <option value="de-DE">German</option>
+            </select>
+          </label>
+        </div>
+
+        <h3>Appearance</h3>
+        <div class="row">
+          <div class="field">
+            <span class="label" for="accent-color">Accent color</span>
+            <div class="color-row">
+              <input id="accent-color" name="accent" type="color" value="#2b6cb0"
+                     aria-label="Accent color">
+              <div id="theme-swatch" aria-hidden="true"></div>
+              <button type="button" id="btn-apply-accent" class="secondary">
+                Apply accent
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="ui-density">UI density</label>
+            <div class="range-row">
+              <input id="ui-density" name="density" type="range"
+                     min="0" max="100" value="40" aria-valuetext="Comfortable">
+              <span id="density-label">Comfortable</span>
+            </div>
+          </div>
+        </div>
+
+        <h3>Notifications</h3>
+        <div class="checks">
+          <label>
+            <input type="checkbox" id="notify-email" checked>
+            Email digests
+          </label>
+          <label>
+            <input type="checkbox" id="notify-push">
+            Browser push (fake)
+          </label>
+          <label>
+            <input type="checkbox" id="notify-slack">
+            Slack webhook (fake)
+          </label>
+        </div>
+
+        <h3>Attachments</h3>
+        <div class="row">
+          <label class="field" for="logo-upload">
+            Company logo
+            <input id="logo-upload" name="logo" type="file" accept="image/*">
+          </label>
+          <p class="file-name" id="logo-filename">No file chosen</p>
+        </div>
+
+        <div class="toolbar">
+          <button type="button" id="btn-save-settings">Save settings</button>
+          <button type="button" id="btn-reset-settings" class="secondary">
+            Reset defaults
+          </button>
+          <button type="button" id="btn-danger-wipe" class="danger">
+            Wipe demo data
+          </button>
+        </div>
+
+        <details class="help">
+          <summary>About this demo</summary>
+          <p>
+            Nothing here is persisted to a real backend. All actions update the
+            on-page activity log and toast so you can exercise Hint hover + chat
+            against a busy host DOM.
+          </p>
+        </details>
+      </section>
+    </main>
+
+    <aside class="activity" aria-label="Activity log">
+      <h2>Activity</h2>
+      <div class="toolbar">
+        <button type="button" id="btn-clear-log" class="secondary">Clear</button>
+      </div>
+      <ul id="activity-log"></ul>
+    </aside>
+  </div>
+
+  <footer class="page-foot">
+    Acme Invoicing demo · not a real product · Hint embed loads from
+    <code>localhost:1337</code>
+  </footer>
+
+  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      const $ = (sel, root) => (root || document).querySelector(sel);
+      const $$ = (sel, root) =>
+        Array.from((root || document).querySelectorAll(sel));
+
+      const logEl = $('#activity-log');
+      const toastEl = $('#toast');
+      const bannerEl = $('#global-banner');
+      let toastTimer = null;
+      let exportTimer = null;
+
+      const invoices = [
+        {
+          id: 'INV-1001',
+          customer: 'Acme Retail',
+          amount: 420,
+          currency: 'USD',
+          status: 'sent',
+        },
+        {
+          id: 'INV-1002',
+          customer: 'Northwind',
+          amount: 1280.5,
+          currency: 'USD',
+          status: 'overdue',
+        },
+        {
+          id: 'INV-1003',
+          customer: 'Contoso',
+          amount: 90,
+          currency: 'EUR',
+          status: 'paid',
+        },
+      ];
+
+      const customers = [
+        { company: 'Acme Retail', country: 'US' },
+        { company: 'Northwind', country: 'US' },
+        { company: 'Contoso', country: 'DE' },
+      ];
+
+      const log = (message) => {
+        const li = document.createElement('li');
+        const time = new Date().toLocaleTimeString();
+        li.textContent = time + ' — ' + message;
+        logEl.insertBefore(li, logEl.firstChild);
+        while (logEl.children.length > 40) {
+          logEl.removeChild(logEl.lastChild);
+        }
+      };
+
+      const toast = (message) => {
+        toastEl.textContent = message;
+        toastEl.hidden = false;
+        if (toastTimer) {
+          clearTimeout(toastTimer);
+        }
+        toastTimer = setTimeout(() => {
+          toastEl.hidden = true;
+        }, 2600);
+      };
+
+      const showBanner = (message) => {
+        bannerEl.textContent = message;
+        bannerEl.hidden = !message;
+      };
+
+      const money = (amount, currency) => {
+        try {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency || 'USD',
+          }).format(amount);
+        } catch (err) {
+          return String(amount) + ' ' + (currency || 'USD');
+        }
+      };
+
+      const refreshStats = () => {
+        $('#stat-total').textContent = String(invoices.length);
+        $('#stat-paid').textContent = String(
+          invoices.filter((i) => i.status === 'paid').length,
+        );
+        $('#stat-open').textContent = String(
+          invoices.filter((i) => i.status !== 'paid').length,
+        );
+      };
+
+      const matchesFilters = (inv) => {
+        const q = ($('#invoice-search').value || '').trim().toLowerCase();
+        const status = $('#status-filter').value;
+        const hay = (inv.id + ' ' + inv.customer).toLowerCase();
+        if (q && hay.indexOf(q) === -1) {
+          return false;
+        }
+        if (status !== 'all' && inv.status !== status) {
+          return false;
+        }
+        return true;
+      };
+
+      const renderInvoices = () => {
+        const tbody = $('#invoice-tbody');
+        tbody.innerHTML = '';
+        const rows = invoices.filter(matchesFilters);
+        if (!rows.length) {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td colspan="5">No invoices match the current filters.</td>';
+          tbody.appendChild(tr);
+          refreshStats();
+          return;
+        }
+        rows.forEach((inv) => {
+          const tr = document.createElement('tr');
+          tr.dataset.id = inv.id;
+          tr.innerHTML =
+            '<td>' + inv.id + '</td>' +
+            '<td>' + inv.customer + '</td>' +
+            '<td>' + money(inv.amount, inv.currency) + '</td>' +
+            '<td><span class="status ' + inv.status + '">' +
+              inv.status + '</span></td>' +
+            '<td></td>';
+          const actions = tr.lastElementChild;
+          const markSent = document.createElement('button');
+          markSent.type = 'button';
+          markSent.className = 'secondary';
+          markSent.textContent = 'Mark sent';
+          markSent.setAttribute('aria-label', 'Mark ' + inv.id + ' sent');
+          markSent.addEventListener('click', () => {
+            inv.status = 'sent';
+            log('Marked ' + inv.id + ' as sent');
+            toast(inv.id + ' marked sent');
+            renderInvoices();
+          });
+          const markPaid = document.createElement('button');
+          markPaid.type = 'button';
+          markPaid.textContent = 'Mark paid';
+          markPaid.setAttribute('aria-label', 'Mark ' + inv.id + ' paid');
+          markPaid.addEventListener('click', () => {
+            inv.status = 'paid';
+            log('Marked ' + inv.id + ' as paid');
+            toast(inv.id + ' marked paid');
+            renderInvoices();
+          });
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'danger';
+          remove.textContent = 'Delete';
+          remove.setAttribute('aria-label', 'Delete ' + inv.id);
+          remove.addEventListener('click', () => {
+            const idx = invoices.findIndex((x) => x.id === inv.id);
+            if (idx >= 0) {
+              invoices.splice(idx, 1);
+            }
+            log('Deleted ' + inv.id);
+            toast('Deleted ' + inv.id);
+            renderInvoices();
+          });
+          actions.appendChild(markSent);
+          actions.appendChild(document.createTextNode(' '));
+          actions.appendChild(markPaid);
+          actions.appendChild(document.createTextNode(' '));
+          actions.appendChild(remove);
+          tbody.appendChild(tr);
+        });
+        refreshStats();
+      };
+
+      const renderCustomers = () => {
+        const list = $('#customer-list');
+        list.innerHTML = '';
+        customers.forEach((c, i) => {
+          const li = document.createElement('li');
+          li.textContent = c.company + ' (' + c.country + ') ';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'secondary';
+          btn.textContent = 'Remove';
+          btn.setAttribute('aria-label', 'Remove ' + c.company);
+          btn.addEventListener('click', () => {
+            customers.splice(i, 1);
+            log('Removed customer ' + c.company);
+            toast('Removed ' + c.company);
+            renderCustomers();
+          });
+          li.appendChild(btn);
+          list.appendChild(li);
+        });
+      };
+
+      const switchMainTab = (panelId) => {
+        $$('.nav-tab').forEach((tab) => {
+          const selected = tab.getAttribute('data-panel') === panelId;
+          tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+        $$('main .panel').forEach((panel) => {
+          panel.hidden = panel.id !== panelId;
+        });
+        log('Switched to ' + panelId.replace('panel-', ''));
+      };
+
+      $$('.nav-tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          switchMainTab(tab.getAttribute('data-panel'));
+        });
+      });
+
+      $('#invoice-search').addEventListener('input', () => {
+        renderInvoices();
+        log('Filtered invoices by search');
+      });
+      $('#status-filter').addEventListener('change', () => {
+        renderInvoices();
+        log('Filtered invoices by status: ' + $('#status-filter').value);
+      });
+      $('#btn-refresh-table').addEventListener('click', () => {
+        renderInvoices();
+        toast('Invoice list refreshed');
+        log('Refreshed invoice list');
+      });
+
+      $('#export-report').addEventListener('click', () => {
+        if (exportTimer) {
+          clearInterval(exportTimer);
+        }
+        let pct = 0;
+        $('#export-progress').style.width = '0%';
+        $('#export-pct').textContent = '0%';
+        $('#export-report').disabled = true;
+        log('Started export report');
+        exportTimer = setInterval(() => {
+          pct += 10;
+          $('#export-progress').style.width = pct + '%';
+          $('#export-pct').textContent = pct + '%';
+          if (pct >= 100) {
+            clearInterval(exportTimer);
+            exportTimer = null;
+            $('#export-report').disabled = false;
+            toast('Report exported (demo CSV in memory only)');
+            log('Export report completed');
+            showBanner('Last export finished at ' +
+              new Date().toLocaleTimeString());
+          }
+        }, 120);
+      });
+
+      let invoiceSeq = 1004;
+      $('#create-invoice-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const customer = $('#customer-name').value.trim();
+        const amount = Number($('#invoice-amount').value);
+        if (!customer || !(amount >= 0)) {
+          toast('Customer and amount are required');
+          log('Create invoice failed validation');
+          return;
+        }
+        const currency = $('#invoice-currency').value;
+        const terms = ($('input[name="terms"]:checked') || {}).value || 'net15';
+        const deliver = [];
+        if ($('#opt-email').checked) { deliver.push('email'); }
+        if ($('#opt-sms').checked) { deliver.push('sms'); }
+        if ($('#opt-pdf').checked) { deliver.push('pdf'); }
+        const id = 'INV-' + invoiceSeq++;
+        invoices.unshift({
+          id: id,
+          customer: customer,
+          amount: amount,
+          currency: currency,
+          status: 'draft',
+        });
+        log(
+          'Created ' + id + ' for ' + customer + ' · ' +
+          money(amount, currency) + ' · terms ' + terms +
+          (deliver.length ? ' · ' + deliver.join('+') : ''),
+        );
+        toast('Created ' + id);
+        event.target.reset();
+        $('#opt-email').checked = true;
+        $('#opt-pdf').checked = true;
+        renderInvoices();
+      });
+
+      $('#btn-save-draft').addEventListener('click', () => {
+        const customer = $('#customer-name').value.trim() || 'Untitled';
+        const amount = Number($('#invoice-amount').value) || 0;
+        const id = 'INV-' + invoiceSeq++;
+        invoices.unshift({
+          id: id,
+          customer: customer,
+          amount: amount,
+          currency: $('#invoice-currency').value,
+          status: 'draft',
+        });
+        log('Saved draft ' + id);
+        toast('Draft ' + id + ' saved');
+        renderInvoices();
+      });
+
+      $('#btn-reset-invoice').addEventListener('click', () => {
+        log('Cleared create-invoice form');
+        toast('Form cleared');
+      });
+
+      $('#customer-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const company = $('#cust-company').value.trim();
+        if (!company) {
+          return;
+        }
+        const country = $('#cust-country').value;
+        customers.push({ company: company, country: country });
+        const tiers = $$('#cust-tier option:checked').map((o) => o.value);
+        log(
+          'Added customer ' + company + ' (' + country + ')' +
+          (tiers.length ? ' · tiers: ' + tiers.join(', ') : ''),
+        );
+        toast('Added ' + company);
+        event.target.reset();
+        $('#cust-tier option[value="starter"]').selected = true;
+        renderCustomers();
+      });
+
+      $('#btn-import-customers').addEventListener('click', () => {
+        customers.push(
+          { company: 'Imported Co ' + (customers.length + 1), country: 'US' },
+        );
+        log('Imported fake CSV row');
+        toast('Imported 1 customer (fake)');
+        renderCustomers();
+      });
+
+      const reportCopy = {
+        revenue: 'Revenue report: last 30 days · $4,280 collected (demo data).',
+        aging: 'Aging report: 1 invoice overdue · $1,280.50 outstanding.',
+        tax: 'Tax summary: estimated VAT/sales tax $312.40 (not filing advice).',
+      };
+
+      $$('.pill-tabs [role="tab"]').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          $$('.pill-tabs [role="tab"]').forEach((t) => {
+            t.setAttribute('aria-selected', 'false');
+          });
+          tab.setAttribute('aria-selected', 'true');
+          const key = tab.getAttribute('data-report');
+          $('#report-pane').textContent = reportCopy[key] || '';
+          log('Opened ' + key + ' report tab');
+        });
+      });
+
+      $('#btn-schedule-report').addEventListener('click', () => {
+        const msg =
+          'Scheduled ' + $('#report-freq').value +
+          ' report at ' + $('#report-time').value;
+        log(msg);
+        toast(msg);
+      });
+      $('#btn-run-report-now').addEventListener('click', () => {
+        log('Ran report job now');
+        toast('Report job queued (demo)');
+        showBanner('Report run started — check Activity for completion notes.');
+      });
+
+      $('#menu-pdf').addEventListener('click', () => {
+        log('Download PDF (noop)');
+        toast('PDF download simulated');
+      });
+      $('#menu-csv').addEventListener('click', () => {
+        log('Download CSV (noop)');
+        toast('CSV download simulated');
+      });
+      $('#menu-share').addEventListener('click', () => {
+        const link = location.origin + location.pathname + '#shared-report';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(link).then(
+            () => {
+              log('Copied share link');
+              toast('Share link copied');
+            },
+            () => {
+              log('Share link: ' + link);
+              toast(link);
+            },
+          );
+        } else {
+          log('Share link: ' + link);
+          toast(link);
+        }
+      });
+      $('#menu-email').addEventListener('click', () => {
+        log('Emailed report to me (fake)');
+        toast('Email queued (demo)');
+      });
+
+      $('#accent-color').addEventListener('input', () => {
+        $('#theme-swatch').style.background = $('#accent-color').value;
+      });
+      $('#btn-apply-accent').addEventListener('click', () => {
+        const color = $('#accent-color').value;
+        document.documentElement.style.setProperty('--navy', color);
+        $$('button:not(.secondary):not(.danger)').forEach((b) => {
+          b.style.background = color;
+          b.style.borderColor = color;
+        });
+        log('Applied accent ' + color);
+        toast('Accent applied');
+      });
+
+      const densityLabel = (v) => {
+        if (v < 34) { return 'Compact'; }
+        if (v < 67) { return 'Comfortable'; }
+        return 'Spacious';
+      };
+      $('#ui-density').addEventListener('input', () => {
+        const v = Number($('#ui-density').value);
+        const label = densityLabel(v);
+        $('#density-label').textContent = label;
+        $('#ui-density').setAttribute('aria-valuetext', label);
+      });
+
+      $('#logo-upload').addEventListener('change', () => {
+        const file = $('#logo-upload').files && $('#logo-upload').files[0];
+        $('#logo-filename').textContent = file
+          ? file.name + ' (' + Math.round(file.size / 1024) + ' KB)'
+          : 'No file chosen';
+        log(file ? 'Selected logo ' + file.name : 'Cleared logo file');
+      });
+
+      $('#btn-save-settings').addEventListener('click', () => {
+        const name = $('#workspace-name').value.trim() || 'Sandbox';
+        $('#workspace-label').textContent = name;
+        const notes = [];
+        if ($('#notify-email').checked) { notes.push('email'); }
+        if ($('#notify-push').checked) { notes.push('push'); }
+        if ($('#notify-slack').checked) { notes.push('slack'); }
+        log(
+          'Saved settings · workspace=' + name +
+          ' · locale=' + $('#locale').value +
+          ' · notify=' + (notes.join(',') || 'none'),
+        );
+        toast('Settings saved');
+      });
+
+      $('#btn-reset-settings').addEventListener('click', () => {
+        $('#workspace-name').value = 'Sandbox';
+        $('#workspace-label').textContent = 'Sandbox';
+        $('#locale').value = 'en-US';
+        $('#accent-color').value = '#2b6cb0';
+        $('#theme-swatch').style.background = '#2b6cb0';
+        $('#ui-density').value = '40';
+        $('#density-label').textContent = 'Comfortable';
+        $('#notify-email').checked = true;
+        $('#notify-push').checked = false;
+        $('#notify-slack').checked = false;
+        $('#logo-upload').value = '';
+        $('#logo-filename').textContent = 'No file chosen';
+        log('Reset settings to defaults');
+        toast('Defaults restored');
+      });
+
+      $('#btn-danger-wipe').addEventListener('click', () => {
+        const ok = window.confirm(
+          'Wipe all demo invoices and customers? This cannot be undone (in this tab).',
+        );
+        if (!ok) {
+          log('Wipe cancelled');
+          return;
+        }
+        invoices.splice(0, invoices.length);
+        customers.splice(0, customers.length);
+        renderInvoices();
+        renderCustomers();
+        showBanner('Demo data wiped. Create new invoices from the Invoices tab.');
+        log('Wiped demo data');
+        toast('Demo data wiped');
+      });
+
+      $('#btn-clear-log').addEventListener('click', () => {
+        logEl.innerHTML = '';
+        toast('Activity cleared');
+      });
+
+      const tick = () => {
+        $('#clock').textContent = new Date().toLocaleTimeString();
+      };
+      tick();
+      setInterval(tick, 1000);
+
+      renderInvoices();
+      renderCustomers();
+      log('Demo page ready');
+    })();
+  </script>
+
+<script src="http://localhost:1337/embed/v1/loader.js"
+data-hint-company-id="cmp_b842d47e"
+data-hint-api-url="http://localhost:8000" defer></script>
 </body>
 </html>

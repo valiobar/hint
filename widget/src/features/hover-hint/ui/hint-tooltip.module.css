@@ -1,0 +1,98 @@
+.tooltip {
+	position: fixed;
+	left: var(--hint-tooltip-x);
+	top: var(--hint-tooltip-y);
+	max-width: 280px;
+	padding: var(--hint-space-2) var(--hint-space-3);
+	background: var(--hint-surface);
+	color: var(--hint-text);
+	border-radius: var(--hint-radius-sm);
+	box-shadow: var(--hint-shadow);
+	font-family: var(--hint-font);
+	font-size: 0.8125rem;
+	line-height: 1.4;
+	z-index: var(--hint-z-tooltip);
+	pointer-events: none;
+	transform: translate(-50%, 0);
+	transition:
+		left var(--hint-duration-fast) var(--hint-ease),
+		top var(--hint-duration-fast) var(--hint-ease);
+}
+
+/* Arrow pointing at the hovered element */
+.tooltip::after {
+	content: '';
+	position: absolute;
+	left: 50%;
+	inline-size: 8px;
+	block-size: 8px;
+	background: var(--hint-surface);
+}
+
+.above {
+	transform: translate(-50%, -100%);
+	animation: tooltipInAbove var(--hint-duration-base) var(--hint-ease);
+}
+
+.above::after {
+	top: 100%;
+	transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.below {
+	transform: translate(-50%, 0);
+	animation: tooltipInBelow var(--hint-duration-base) var(--hint-ease);
+}
+
+.below::after {
+	bottom: 100%;
+	transform: translate(-50%, 50%) rotate(45deg);
+}
+
+@keyframes tooltipInAbove {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -100%) translateY(4px) scale(0.96);
+	}
+
+	to {
+		opacity: 1;
+		transform: translate(-50%, -100%) translateY(0) scale(1);
+	}
+}
+
+@keyframes tooltipInBelow {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 0) translateY(-4px) scale(0.96);
+	}
+
+	to {
+		opacity: 1;
+		transform: translate(-50%, 0) translateY(0) scale(1);
+	}
+}
+
+.shimmer {
+	display: block;
+	width: 10rem;
+	height: 0.75rem;
+	border-radius: var(--hint-radius-sm);
+	background: linear-gradient(
+		90deg,
+		var(--hint-surface-muted) 25%,
+		var(--hint-border) 50%,
+		var(--hint-surface-muted) 75%
+	);
+	background-size: 200% 100%;
+	animation: hint-shimmer 1.2s infinite;
+}
+
+@keyframes hint-shimmer {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -200% 0;
+	}
+}

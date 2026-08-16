@@ -13,8 +13,11 @@ from app.repositories.user_repo import UserRepository
 from app.repositories.vector_repo import VectorRepository
 from app.services.auth_service import AuthService
 from app.services.company_service import CompanyService
+from app.services.hint_cache import HintCache
 from app.services.ingestion_service import IngestionService
 from app.services.retrieval_service import RetrievalService
+
+_hint_cache: HintCache | None = None
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _UNAUTHORIZED_HEADERS = {"WWW-Authenticate": "Bearer"}
@@ -85,6 +88,17 @@ def get_retrieval_service(
     vector_repo: VectorRepository = Depends(get_vector_repo),
 ) -> RetrievalService:
     return RetrievalService(vector_repo)
+
+
+def get_hint_cache() -> HintCache:
+    global _hint_cache
+    if _hint_cache is None:
+        settings = get_settings()
+        _hint_cache = HintCache(
+            ttl_seconds=settings.hint_cache_ttl_seconds,
+            max_entries=settings.hint_cache_max_entries,
+        )
+    return _hint_cache
 
 
 def require_openai_key() -> None:

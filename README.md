@@ -8,7 +8,7 @@ hints grounded in that knowledge and the live page context.
 
 | Service | Tech | Host port | Purpose |
 |---|---|---|---|
-| `backend` | FastAPI (Python 3.12) | 8000 | Auth, companies, document ingestion, retrieval (`docs/02-backend.md`, `docs/05-auth.md`); chat in Phase 3 |
+| `backend` | FastAPI (Python 3.12) | 8000 | Auth, companies, document ingestion, retrieval, chat (SSE), hints (`docs/02-backend.md`, `docs/05-auth.md`, `docs/06-ai-layer.md`) |
 | `mongo` | mongo:7 | — (internal) | companies, documents, users |
 | `chromadb` | chromadb/chroma:0.5.23 | — (internal) | per-company vector collections |
 | `admin` | React + Vite → nginx | 3001 | company + KB management (`docs/04-admin.md`) |
@@ -17,8 +17,8 @@ hints grounded in that knowledge and the live page context.
 
 Traffic: Admin / Demo / Widget (browser) → Backend (:8000). Mongo and Chroma stay on the
 compose network only. Chroma listens on 8000 inside the network (same as backend) but is
-never published to the host. Admin companies/documents calls send a JWT; `/retrieve` and
-`/health` stay public so the embed works without credentials.
+never published to the host. Admin companies/documents calls send a JWT; `/retrieve`,
+`/chat`, `/hint`, and `/health` stay public so the embed works without credentials.
 
 ## Quick start
 
@@ -26,7 +26,7 @@ never published to the host. Admin companies/documents calls send a JWT; `/retri
 cp .env.example .env
 # Required before first boot:
 #   ADMIN_PASSWORD   — preset admin login (empty disables login entirely)
-#   OPENAI_API_KEY   — document upload and /retrieve (503 without it)
+#   OPENAI_API_KEY   — upload, /retrieve, /chat, /hint (503 without it)
 docker compose up --build
 ```
 
@@ -66,8 +66,8 @@ Auth contract (seeding, JWT, rotation): `docs/05-auth.md`.
 ## Debug path: curl
 
 Same flow over HTTP. Obtain a token first — companies/documents return 401 without it.
-`POST /api/v1/retrieve` stays public (widget path). Full contracts:
-`docs/02-backend.md`.
+`POST /api/v1/retrieve`, `/chat`, and `/hint` stay public (widget path). Full
+contracts: `docs/02-backend.md`. AI runtime: `docs/06-ai-layer.md`.
 
 ```bash
 TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
@@ -89,9 +89,43 @@ curl -s -X POST localhost:8000/api/v1/retrieve \
   -d '{"company_id": "cmp_1a2b3c4d", "query": "how do I export a report?", "k": 3}'
 ```
 
-Without `OPENAI_API_KEY`, the stack still boots but upload and `/retrieve` return
-`503` with an actionable message. A scanned/image-only PDF is marked
-`"status": "failed"` (no OCR in the POC) — the rest of the batch still ingests.
+Without `OPENAI_API_KEY`, the stack still boots but upload, `/retrieve`, `/chat`,
+and `/hint` return `503` with an actionable message. A scanned/image-only PDF is
+marked `"status": "failed"` (no OCR in the POC) — the rest of the batch still
+ingests.
+
+## Phase 3 demo path: chat + hint
+
+Requires a **real** `OPENAI_API_KEY` in `.env` and a company with at least one
+`ready` document (admin walkthrough or the curl above). Both endpoints are
+public — no JWT.
+
+```bash
+PAGE_CTX='{"url":"https://app.acme.com/reports","title":"Reports",
+  "headings":["Reports"],"visible_text_excerpt":"Monthly reports overview",
+  "interactive":[{"tag":"button","text":"Export report","role":null,
+    "attrs":{"id":"export-report"},"selector_path":"main > button#export-report"}]}'
+
+# Chat — SSE token stream (-N disables curl buffering)
+curl -N -s -X POST localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_1a2b3c4d\",
+       \"messages\":[{\"role\":\"user\",\"content\":\"How do I export a report?\"}],
+       \"page_context\":$PAGE_CTX}"
+# → event: token … then event: done  {"sources":["user-manual.pdf"]}
+
+# Hint — one sentence ≤ 140 chars; second identical call is a cache hit
+curl -s -X POST localhost:8000/api/v1/hint \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_1a2b3c4d\",
+       \"element\":{\"tag\":\"button\",\"text\":\"Export report\",\"role\":null,
+         \"attrs\":{\"id\":\"export-report\"},\"selector_path\":\"main > button#export-report\"},
+       \"page_context\":$PAGE_CTX}"
+# → {"hint":"…","source":"user-manual.pdf"}
+```
+
+Swagger UI at http://localhost:8000/docs lists both under the `assist` tag.
+Graph topology, SSE event shapes, and cache semantics: `docs/06-ai-layer.md`.
 
 ## Environment variables
 
@@ -104,8 +138,11 @@ variables below are the ones you normally set on the host.
 | `ADMIN_EMAIL` | `admin@hint.local` | backend | Preset admin email (normalized to lowercase) |
 | `JWT_SECRET` | `dev-insecure-secret-change-me` | backend | Change before any shared/deployed stack |
 | `ACCESS_TOKEN_TTL_MINUTES` | `720` | backend | Access-token lifetime (no refresh token in the POC) |
-| `OPENAI_API_KEY` | `""` | backend | Required for document upload and `/retrieve` (503 without it); stack boots without it |
+| `OPENAI_API_KEY` | `""` | backend | Required for upload, `/retrieve`, `/chat`, `/hint` (503 without it); stack boots without it |
+| `LLM_PROVIDER` | `openai` | backend | Chat / hint factory; unknown value raises at first LLM call |
 | `LLM_MODEL` | `gpt-4o-mini` | backend | Chat / hint model |
+| `HINT_CACHE_TTL_SECONDS` | `3600` | backend | In-process hint cache TTL |
+| `HINT_CACHE_MAX_ENTRIES` | `1024` | backend | Hint cache cap (oldest-first eviction) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | backend | Document embeddings |
 | `MONGODB_URL` | set by compose | backend | Override only for local (non-Docker) runs |
 | `MONGODB_DB_NAME` | `hint` (compose) | backend | Database name |
@@ -139,11 +176,13 @@ The admin panel copies this with the selected `company_id` baked in:
 
 ## Status
 
-**Phase 2 (admin panel + preset-admin auth) — complete.** Sign in, create a company,
-upload docs, copy the snippet. Companies/documents require a JWT; `/retrieve` stays
-public for the widget. Admin auth landed here instead of the Phase 6 hardening pass.
+**Phase 3 (AI layer) — complete.** Chat streams grounded answers over SSE; hints
+return a ≤ 140-char one-liner from an in-process TTL cache. Both are public and
+need a real `OPENAI_API_KEY`. The widget UI that will call them is Phase 4.
+Phase 2 (admin panel + preset-admin auth) remains the operator path.
 
 See `plans/hint_poc_implementation.md` (master),
-`plans/phase_2_admin_panel.md` (this phase), and the architecture docs:
+`plans/phase_3_ai_layer.md` (this phase), and the architecture docs:
 `docs/01-architecture-overview.md` (stack), `docs/02-backend.md` (API + ingestion),
-`docs/04-admin.md` (admin SPA), `docs/05-auth.md` (auth contract).
+`docs/04-admin.md` (admin SPA), `docs/05-auth.md` (auth contract),
+`docs/06-ai-layer.md` (LangGraph + SSE + hint cache).

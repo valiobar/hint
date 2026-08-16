@@ -1,0 +1,80 @@
+.bar {
+	box-sizing: border-box;
+	position: fixed;
+	top: 50%;
+	right: 0;
+	transform: translateY(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: var(--hint-space-2);
+	padding: var(--hint-space-2);
+	background: var(--hint-surface);
+	border: 1px solid var(--hint-border);
+	border-right: none;
+	border-radius: var(--hint-radius-lg) 0 0 var(--hint-radius-lg);
+	box-shadow: var(--hint-shadow);
+	font-family: var(--hint-font);
+	color: var(--hint-text);
+	/* Entrance: slide in from the right edge shortly after load so
+	   the widget announces itself on the host page. `backwards` keeps
+	   it hidden during the delay. */
+	animation: barIn 320ms var(--hint-ease) 300ms backwards;
+}
+
+@keyframes barIn {
+	from {
+		opacity: 0;
+		transform: translateY(-50%) translateX(100%);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(-50%) translateX(0);
+	}
+}
+
+.barButton {
+	display: grid;
+	place-items: center;
+	inline-size: 2.25rem;
+	block-size: 2.25rem;
+	border: none;
+	border-radius: var(--hint-radius-sm);
+	background: transparent;
+	color: var(--hint-text-muted);
+	cursor: pointer;
+	transition:
+		background var(--hint-duration-fast) var(--hint-ease),
+		color var(--hint-duration-fast) var(--hint-ease),
+		box-shadow var(--hint-duration-fast) var(--hint-ease),
+		transform var(--hint-duration-fast) var(--hint-ease);
+}
+
+.barButton:hover:not(:disabled) {
+	background: var(--hint-accent-soft);
+	color: var(--hint-accent);
+	transform: translateX(-1px);
+}
+
+.barButton:active:not(:disabled) {
+	transform: scale(0.94);
+}
+
+.barButton:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.barButton:disabled {
+	cursor: not-allowed;
+}
+
+.active {
+	background: var(--hint-accent-soft);
+	color: var(--hint-accent);
+	box-shadow: 0 0 10px rgb(79 70 229 / 0.25);
+}
+
+.disabled {
+	opacity: 0.5;
+}

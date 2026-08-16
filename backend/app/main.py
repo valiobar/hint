@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.db import chroma, mongo
 from app.repositories.user_repo import UserRepository
+from app.routes.assist import router as assist_router
 from app.routes.auth import router as auth_router
 from app.routes.companies import router as companies_router
 from app.routes.deps import require_admin
@@ -42,6 +43,7 @@ app.include_router(
     documents_router, prefix="/api/v1", dependencies=[Depends(require_admin)]
 )
 app.include_router(retrieve_router, prefix="/api/v1")
+app.include_router(assist_router, prefix="/api/v1")
 
 
 @app.get("/health")

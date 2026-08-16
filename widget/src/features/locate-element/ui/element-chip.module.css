@@ -1,0 +1,57 @@
+.wrapper {
+	position: relative;
+	display: inline-block;
+}
+
+.chip {
+	display: inline;
+	padding: 0 var(--hint-space-1);
+	border: none;
+	border-radius: var(--hint-radius-sm);
+	background: var(--hint-accent-soft);
+	color: var(--hint-accent);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.chip:hover {
+	text-decoration: underline;
+}
+
+.chip:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.action {
+	position: absolute;
+	top: -0.7rem;
+	right: -0.7rem;
+	padding: 0.2rem;
+	border: none;
+	border-radius: var(--hint-radius-sm);
+	background: var(--hint-accent);
+	color: var(--hint-surface);
+	cursor: pointer;
+	line-height: 0;
+	opacity: 0;
+	visibility: hidden;
+	transform: scale(0.8);
+	transition:
+		opacity var(--hint-duration-fast) var(--hint-ease),
+		visibility var(--hint-duration-fast) var(--hint-ease),
+		transform var(--hint-duration-fast) var(--hint-ease);
+}
+
+.action:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.wrapper:hover .action,
+.wrapper:focus-within .action {
+	opacity: 1;
+	visibility: visible;
+	transform: scale(1);
+}

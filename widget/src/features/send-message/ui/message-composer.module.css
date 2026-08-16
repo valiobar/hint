@@ -1,0 +1,80 @@
+.composer {
+	box-sizing: border-box;
+	display: flex;
+	align-items: flex-end;
+	gap: var(--hint-space-2);
+	padding: var(--hint-space-3);
+	border-top: 1px solid var(--hint-border);
+	background: var(--hint-surface);
+	font-family: var(--hint-font);
+}
+
+.input {
+	box-sizing: border-box;
+	flex: 1;
+	min-inline-size: 0;
+	resize: none;
+	padding: var(--hint-space-2) var(--hint-space-3);
+	border: 1px solid var(--hint-border);
+	border-radius: var(--hint-radius-sm);
+	background: var(--hint-surface);
+	color: var(--hint-text);
+	font-family: var(--hint-font);
+	font-size: 0.85rem;
+	line-height: 1.4;
+}
+
+.input:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.input:disabled {
+	opacity: 0.5;
+}
+
+.sendButton {
+	box-sizing: border-box;
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	inline-size: 2.25rem;
+	block-size: 2.25rem;
+	border: none;
+	border-radius: var(--hint-radius-sm);
+	background: var(--hint-accent);
+	color: #fff;
+	cursor: pointer;
+	transition:
+		filter var(--hint-duration-fast) var(--hint-ease),
+		opacity var(--hint-duration-fast) var(--hint-ease),
+		transform var(--hint-duration-fast) var(--hint-ease);
+}
+
+.sendButton svg {
+	transition: transform var(--hint-duration-fast) var(--hint-ease);
+}
+
+.sendButton:hover:not(:disabled) {
+	filter: brightness(1.08);
+	transform: scale(1.05);
+}
+
+/* Paper-plane takeoff nudge */
+.sendButton:hover:not(:disabled) svg {
+	transform: translate(1px, -1px);
+}
+
+.sendButton:active:not(:disabled) {
+	transform: scale(0.92);
+}
+
+.sendButton:focus-visible {
+	outline: 2px solid var(--hint-accent);
+	outline-offset: 1px;
+}
+
+.sendButton:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}

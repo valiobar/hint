@@ -1,10 +1,11 @@
 # Hint — Backend (Knowledge Base API)
 
-> **Status: Phase 2 (admin panel + preset-admin auth) complete.**
+> **Status: Phase 3 (AI layer) complete.**
 > Covers JWT auth, companies CRUD, document ingestion (parse → chunk → embed → Chroma),
-> and the retrieval debug endpoint. Chat / hints (LangGraph, `ai/`) arrive in Phase 3.
-> Auth contract (seeding, token TTL, protected vs public): [`05-auth.md`](05-auth.md).
-> Admin SPA: [`04-admin.md`](04-admin.md). Stack/env:
+> retrieval, and the widget-facing chat (SSE) + hint endpoints. AI runtime:
+> [`06-ai-layer.md`](06-ai-layer.md). Auth contract (seeding, token TTL,
+> protected vs public): [`05-auth.md`](05-auth.md). Admin SPA:
+> [`04-admin.md`](04-admin.md). Stack/env:
 > [`01-architecture-overview.md`](01-architecture-overview.md).
 
 ## Layering
@@ -13,16 +14,22 @@
 repositories never contain business rules:
 
 ```
-routes/        auth.py · companies.py · documents.py · retrieve.py · deps.py
+routes/        auth.py · companies.py · documents.py · retrieve.py · assist.py · deps.py
+  └─▶ ai/              llm_factory.py · prompts.py · chat_graph.py · hint_chain.py
   └─▶ services/        auth_service.py · company_service.py · ingestion_service.py
-                       · retrieval_service.py · text_extraction.py
+                       · retrieval_service.py · text_extraction.py · hint_cache.py
         └─▶ repositories/  user_repo.py · company_repo.py · document_repo.py
                            · vector_repo.py (Chroma adapter)
               └─▶ models/     user.py · company.py · document.py · retrieval.py
+                              · assist.py
 db/            mongo.py (Motor client, ensure_indexes) · chroma.py (HttpClient)
 config.py      Settings (BaseSettings) · get_settings() cached accessor
 main.py        lifespan (connect + indexes + seed admin) · CORS · /health · routers
 ```
+
+`ai/` is the only layer that constructs LLM clients. Routes call `ai/` entry
+points; `ai/` calls `RetrievalService`. Graph topology, SSE event shapes,
+prompts, and hint-cache semantics: [`06-ai-layer.md`](06-ai-layer.md).
 
 Cross-cutting rules:
 
@@ -34,13 +41,14 @@ Cross-cutting rules:
     Applied at router level on companies + documents. Full contract: [`05-auth.md`](05-auth.md).
   - `require_company` — 404 `"Unknown company_id"` before any company-scoped work.
   - `require_openai_key` — 503 with an actionable message when `OPENAI_API_KEY` is empty
-    (the stack boots without it; only ingestion/retrieval need it).
+    (the stack boots without it; ingestion, `/retrieve`, `/chat`, and `/hint` need it).
 
 ## Authentication
 
 Preset admin user, seeded at startup from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (bcrypt,
 idempotent upsert). Login returns a JWT (HS256, default 12 h). Companies and
-documents routers require it; `POST /api/v1/retrieve` and `GET /health` do not.
+documents routers require it; `POST /api/v1/retrieve`, `POST /api/v1/chat`,
+`POST /api/v1/hint`, and `GET /health` do not.
 
 If `ADMIN_PASSWORD` is empty, seeding is skipped and every login is 401 (fail-closed).
 
@@ -78,7 +86,8 @@ Seeding, TTL, rotation, and the public-`/retrieve` trade-off:
 ## API contracts
 
 All routes are mounted under `/api/v1`. Companies and documents require a bearer
-token (Phase 2). `/auth/login`, `/retrieve`, and `/health` are public.
+token (Phase 2). `/auth/login`, `/retrieve`, `/chat`, `/hint`, and `/health`
+are public.
 
 ### POST /api/v1/companies → 201
 
@@ -152,8 +161,8 @@ or unknown/cross-company `document_id`.
 
 ### POST /api/v1/retrieve → 200
 
-Debug endpoint for verifying RAG quality with curl before any LLM code exists.
-Phase 3's chat graph consumes the same `RetrievalService.retrieve()` unchanged.
+Debug endpoint for verifying RAG quality with curl. The chat graph and hint
+chain consume the same `RetrievalService.retrieve()` unchanged.
 
 ```json
 // Request
@@ -174,6 +183,119 @@ Phase 3's chat graph consumes the same `RetrievalService.retrieve()` unchanged.
 
 Errors: `404` unknown `company_id` (validated in-handler since the ID is in the body) ·
 `422` invalid body · `503` `OPENAI_API_KEY` not configured (query embedding needs it).
+
+### POST /api/v1/chat → 200 SSE (public)
+
+LangGraph graph `condense_query → retrieve (k=5) → generate_answer`. Streams
+tokens over `text/event-stream`. The widget (Phase 4) and curl both use POST +
+a readable stream — browsers cannot use `EventSource` (no request body).
+Runtime details: [`06-ai-layer.md`](06-ai-layer.md).
+
+A real `OPENAI_API_KEY` is required. Caps are enforced by Pydantic before any
+LLM spend (≤ 60 interactive elements, ≤ 2000-char excerpt, 1–30 messages,
+1–4000 chars per message). `role` is `user` or `assistant` only — the system
+prompt is backend-owned.
+
+```json
+// Request
+{
+  "company_id": "cmp_1a2b3c4d",
+  "messages": [
+    {"role": "user", "content": "How do I export a report?"}
+  ],
+  "page_context": {
+    "url": "https://app.acme.com/reports",
+    "title": "Reports",
+    "headings": ["Reports"],
+    "visible_text_excerpt": "Monthly reports overview",
+    "interactive": [
+      {
+        "tag": "button",
+        "text": "Export report",
+        "role": null,
+        "attrs": {"id": "export-report"},
+        "selector_path": "main > button#export-report"
+      }
+    ]
+  }
+}
+```
+
+```
+event: token
+data: To export a report,
+
+event: token
+data:  click the "Export report" button
+
+event: done
+data: {"sources": ["user-manual.pdf"]}
+```
+
+| Event | `data` | When |
+|---|---|---|
+| `token` | raw token string | Repeated; only tokens from `generate_answer` (condense never leaks) |
+| `done` | `{"sources": ["user-manual.pdf"]}` | Success. `sources` is `[]` when the KB is empty |
+| `error` | `{"detail": "Chat generation failed"}` | Mid-stream LLM/network failure. HTTP status is already 200 |
+
+| Status | `detail` | When |
+|---|---|---|
+| 404 | `Unknown company_id` | Body `company_id` is not in Mongo. Raised before the stream starts |
+| 422 | FastAPI validation | Caps exceeded, empty `messages`, invalid `role`, etc. |
+| 503 | `OPENAI_API_KEY is not configured; set it in .env and restart` | Empty key (router-level `require_openai_key`) |
+
+Empty KB: the model is told the docs do not cover it; `done` still fires with
+`"sources": []`. Follow-ups are rewritten into a standalone query
+(`condense_query`); a single-message request skips that LLM call.
+
+### POST /api/v1/hint → 200 (public)
+
+One non-streaming LLM call. Retrieval query is
+`element.text or aria-label — page title`; top-3 chunks; response clamped to
+140 characters. Served from an in-process TTL cache keyed by
+`sha1(company_id | url_path | selector_path | element_text)` so repeated
+hovers are free. Cache recipe / TTL / eviction:
+[`06-ai-layer.md`](06-ai-layer.md#hint-cache).
+
+```json
+// Request
+{
+  "company_id": "cmp_1a2b3c4d",
+  "element": {
+    "tag": "button",
+    "text": "Export report",
+    "role": null,
+    "attrs": {"id": "export-report"},
+    "selector_path": "main > button#export-report"
+  },
+  "page_context": {
+    "url": "https://app.acme.com/reports",
+    "title": "Reports",
+    "headings": ["Reports"],
+    "interactive": [],
+    "visible_text_excerpt": ""
+  }
+}
+
+// Response 200
+{"hint": "Exports the current report as a downloadable file.", "source": "user-manual.pdf"}
+```
+
+| Field | Rule |
+|---|---|
+| `hint` | One sentence, ≤ 140 characters (hard clamp after the model) |
+| `source` | Top chunk filename, or `null` when the KB is empty |
+
+| Status | `detail` | When |
+|---|---|---|
+| 404 | `Unknown company_id` | Body `company_id` is not in Mongo. Cache is not consulted |
+| 422 | FastAPI validation | Caps exceeded / missing `element` / invalid body |
+| 503 | `OPENAI_API_KEY is not configured; set it in .env and restart` | Empty key |
+
+Identical second request (same company, URL **path**, selector, element text)
+returns the same JSON from cache — typically tens of milliseconds, no LLM
+tokens. Query-string differences do not bust the cache. Restarting the
+backend empties the store (per-process).
 
 ### GET /health → 200 | 503
 
@@ -237,8 +359,10 @@ company's chunks.
 ## End-to-end curl walkthrough
 
 Prerequisite: `OPENAI_API_KEY` **and** `ADMIN_PASSWORD` set in `.env`, stack up.
+A real OpenAI key is required for upload, `/retrieve`, `/chat`, and `/hint`.
 The browser path (login → create → upload → copy snippet) is in the README and
-[`04-admin.md`](04-admin.md); this is the debug path.
+[`04-admin.md`](04-admin.md); this is the debug path. Chat/hint runtime:
+[`06-ai-layer.md`](06-ai-layer.md).
 
 ```bash
 docker compose up --build -d
@@ -277,7 +401,38 @@ curl -s -X POST localhost:8000/api/v1/retrieve \
   -d '{"company_id": "cmp_1a2b3c4d", "query": "how do I export a report?", "k": 3}'
 # → {"chunks":[{"text":"…export…","filename":"user-manual.pdf","score":0.31}, …]}
 
-# 5. negative paths
+# 5. chat streams tokens over SSE (-N disables curl buffering)
+#    Requires a real OPENAI_API_KEY. Public — no token.
+PAGE_CTX='{"url":"https://app.acme.com/reports","title":"Reports",
+  "headings":["Reports"],"visible_text_excerpt":"Monthly reports overview",
+  "interactive":[{"tag":"button","text":"Export report","role":null,
+    "attrs":{"id":"export-report"},"selector_path":"main > button#export-report"}]}'
+
+curl -N -s -X POST localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_1a2b3c4d\",
+       \"messages\":[{\"role\":\"user\",\"content\":\"How do I export a report?\"}],
+       \"page_context\":$PAGE_CTX}"
+# → many `event: token` lines arriving progressively; answer references the
+#   "Export report" button; then `event: done` `data: {"sources":["user-manual.pdf"]}`
+
+# 6. hint — one-liner; second identical call is served from cache
+time curl -s -X POST localhost:8000/api/v1/hint \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_1a2b3c4d\",
+       \"element\":{\"tag\":\"button\",\"text\":\"Export report\",\"role\":null,
+         \"attrs\":{\"id\":\"export-report\"},\"selector_path\":\"main > button#export-report\"},
+       \"page_context\":$PAGE_CTX}"
+# → {"hint":"…≤140 chars…","source":"user-manual.pdf"}   first call ~1s
+time curl -s -X POST localhost:8000/api/v1/hint \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_1a2b3c4d\",
+       \"element\":{\"tag\":\"button\",\"text\":\"Export report\",\"role\":null,
+         \"attrs\":{\"id\":\"export-report\"},\"selector_path\":\"main > button#export-report\"},
+       \"page_context\":$PAGE_CTX}"
+# → identical JSON, wall time ~0.05s (cache hit)
+
+# 7. negative paths
 curl -s -o /dev/null -w '%{http_code}' \
   "localhost:8000/api/v1/companies/cmp_nope/documents"                      # 401 (no token)
 curl -s -o /dev/null -w '%{http_code}' \
@@ -287,6 +442,15 @@ curl -s -o /dev/null -w '%{http_code}' -X DELETE \
   -H "Authorization: Bearer $TOKEN" \
   "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents/doc_xxx"          # 204 (real id) / 404
 # after a 204, /retrieve no longer returns chunks from the deleted document
+curl -s -X POST localhost:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_nope\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}],
+       \"page_context\":$PAGE_CTX}"                                         # 404
+curl -s -X POST localhost:8000/api/v1/hint \
+  -H 'Content-Type: application/json' \
+  -d "{\"company_id\":\"cmp_nope\",\"element\":{\"tag\":\"button\",\"text\":\"X\",
+       \"role\":null,\"attrs\":{},\"selector_path\":\"button\"},
+       \"page_context\":$PAGE_CTX}"                                         # 404
 ```
 
 ## Failure modes
@@ -296,7 +460,9 @@ curl -s -o /dev/null -w '%{http_code}' -X DELETE \
 | `401 {"detail":"Missing bearer token"}` on companies/documents | No `Authorization` header | `POST /api/v1/auth/login` first; pass `Authorization: Bearer $TOKEN` |
 | `401 {"detail":"Invalid email or password"}` | Wrong creds, or `ADMIN_PASSWORD` unset so seeding was skipped | Set `ADMIN_PASSWORD` in `.env`, restart backend, use that password |
 | `401 {"detail":"Invalid or expired token - sign in again"}` | Expired / tampered JWT, or `JWT_SECRET` changed | Login again |
-| `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` on upload/retrieve | Empty `OPENAI_API_KEY` | Stack boots fine (Phase 0 behavior preserved); set the key in `.env`, `docker compose up -d` |
+| `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` on upload / retrieve / chat / hint | Empty `OPENAI_API_KEY` | Stack boots fine (Phase 0 behavior preserved); set the key in `.env`, `docker compose up -d` |
+| Chat stream ends with `event: error` | LLM/network failure after tokens were sent | HTTP status stays 200; treat the assistant message as failed. See [`06-ai-layer.md`](06-ai-layer.md#failure-modes) |
+| Hint `source: null` / chat `done` with `"sources":[]` | Company exists, no ready documents | Expected empty-KB path — model uses the page/label, not invented features |
 | Upload returns `status: "failed"`, error "No extractable text (scanned PDF or empty file)" | Scanned/image-only PDF, or empty file | Expected — no OCR in the POC; response is still 201 with per-file status |
 | Upload returns `status: "failed"`, error "Unsupported file type: .png" | Extension outside pdf/md/txt/html/htm | Batch continues; other files unaffected |
 | `413 {"detail":"big.pdf exceeds 10 MB"}` | Single file over the 10 MB cap | Whole request rejected before any processing |
@@ -307,12 +473,22 @@ curl -s -o /dev/null -w '%{http_code}' -X DELETE \
 
 ## Tests
 
-Unit tests live in `backend/tests/` (extraction, ingestion, retrieval — service layer
-with in-memory fakes; no Mongo/Chroma/network needed):
+Unit tests live in `backend/tests/` (extraction, ingestion, retrieval, assist
+contract, hint cache, hint chain, chat graph — service / `ai/` layer with
+in-memory fakes; no Mongo/Chroma/network needed):
+
+| File | Covers |
+|---|---|
+| `test_text_extraction.py` / `test_ingestion_service.py` / `test_retrieval_service.py` | Phase 1 pipeline |
+| `test_assist_models.py` | Wire-contract caps (41 elements / 2001-char excerpt / empty messages) |
+| `test_hint_cache.py` | Key stability across query-string URLs; TTL expiry; oldest-first eviction |
+| `test_hint_chain.py` | Query build; 140-char clamp; `source: null` on empty KB |
+| `test_chat_graph.py` | Single message skips condense; retrieval `(company_id, query, 5)`; answer produced |
 
 ```bash
 cd backend && pip install -r requirements-dev.txt && python -m pytest tests/ -v
 ```
 
-Route-level behavior (404 guard, 413, 503-without-key) is covered by the curl
-walkthrough above.
+Route-level behavior (404 guard, 413, 503-without-key, SSE tokens, hint cache
+hit) is covered by the curl walkthrough above. Graph / prompt / cache
+semantics: [`06-ai-layer.md`](06-ai-layer.md).
