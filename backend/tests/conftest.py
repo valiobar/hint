@@ -10,7 +10,7 @@ from app.models.assist import (
     HintRequest,
     PageContext,
 )
-from app.models.document import DocumentMeta
+from app.models.document import DocumentMeta, SourceType
 from app.models.retrieval import Chunk
 
 
@@ -29,13 +29,20 @@ class FakeDocumentRepository:
         self.docs: dict[str, DocumentMeta] = {}
 
     async def create(
-        self, company_id: str, filename: str, size_bytes: int
+        self,
+        company_id: str,
+        filename: str,
+        size_bytes: int,
+        source_type: SourceType = "file",
+        source_url: str | None = None,
     ) -> DocumentMeta:
         doc = DocumentMeta(
             document_id=f"doc_{len(self.docs)}",
             company_id=company_id,
             filename=filename,
             size_bytes=size_bytes,
+            source_type=source_type,
+            source_url=source_url,
             created_at=datetime.now(timezone.utc),
         )
         self.docs[doc.document_id] = doc

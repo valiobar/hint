@@ -24,3 +24,16 @@ export const deleteDocument = (
 		`/api/v1/companies/${companyId}/documents/${documentId}`,
 		{ method: 'DELETE' },
 	);
+
+export const ingestUrls = (
+	companyId: string,
+	urls: string[],
+): Promise<DocumentMeta[]> =>
+	request<DocumentMeta[]>(
+		`/api/v1/companies/${companyId}/documents/from-url`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ urls }),
+		},
+	);

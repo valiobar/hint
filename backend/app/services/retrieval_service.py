@@ -14,6 +14,13 @@ class RetrievalService:
         metadatas = res["metadatas"][0] or []
         distances = res["distances"][0] or []
         return [
-            Chunk(text=text, filename=str(meta["filename"]), score=score)
+            Chunk(
+                text=text,
+                filename=str(meta["filename"]),
+                source_url=(
+                    str(meta["source_url"]) if meta.get("source_url") else None
+                ),
+                score=score,
+            )
             for text, meta, score in zip(documents, metadatas, distances)
         ]

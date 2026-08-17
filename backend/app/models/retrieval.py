@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class Chunk(BaseModel):
     text: str
     filename: str
+    source_url: str | None = None
     score: float  # cosine distance; lower = more similar
 
 

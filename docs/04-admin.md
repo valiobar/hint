@@ -5,8 +5,9 @@
 > Auth contract: [`05-auth.md`](05-auth.md). Backend APIs: [`02-backend.md`](02-backend.md).
 
 The admin SPA (`admin/`, host port **3001**) is the operator UI for the knowledge
-base: sign in as the preset admin, create companies, upload product docs, watch
-per-file ingestion status, delete documents, and copy the embed snippet.
+base: sign in as the preset admin, create companies, upload product docs or paste
+support-page URLs, watch per-document ingestion status, delete documents, and
+copy the embed snippet.
 
 ## FSD layout
 
@@ -22,19 +23,20 @@ admin/src/
 │   └── styles/global.css            # reset; imports shared tokens
 ├── widgets/
 │   ├── companies-sidebar/           # list + create-company feature
-│   ├── company-detail/              # snippet + starter questions + upload + document list
+│   ├── company-detail/              # snippet + starter questions + upload + URL form + document list
 │   ├── product-overview/            # unselected-company product + feature cards
 │   └── api-status/                  # GET /health badge (public, no token)
 ├── features/
 │   ├── login/                       # Zod schema + login form
 │   ├── create-company/              # Zod schema + name form
 │   ├── upload-documents/            # client pre-validation + dropzone
+│   ├── add-url-source/              # paste URLs (one per line) → ingestUrls
 │   ├── delete-document/             # confirm + store action
 │   ├── copy-embed-snippet/          # buildEmbedSnippet + CopyBlock
 │   └── edit-suggested-questions/    # 0–4 starter chips for the widget empty state
 ├── entities/
 │   ├── company/                     # CompanyListItem
-│   └── document/                    # DocumentRow (status pill + error)
+│   └── document/                    # DocumentRow (status pill + URL link + error)
 ├── shared/
 │   ├── api/                         # http.ts, types, auth/companies/documents
 │   ├── config/                      # API_URL, WIDGET_CDN_URL (Vite env)
@@ -66,6 +68,8 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `documentsError` | `string \| null` | List/delete failures |
 | `uploadingFiles` | `{ name, sizeBytes }[]` | Placeholder rows during the request |
 | `uploadError` | `string \| null` | 503 / 413 / network under the dropzone |
+| `isIngestingUrls` | `boolean` | URL form button "Ingesting…" |
+| `ingestUrlsError` | `string \| null` | 503 / 422 / network under the URL form |
 | `isSavingSuggestedQuestions` | `boolean` | Save button "Saving…" on the starter-questions form |
 | `suggestedQuestionsError` | `string \| null` | PATCH `detail` or network under the form |
 
@@ -81,6 +85,7 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `selectCompany(id)` | Reset documents/errors, then `loadDocuments` |
 | `loadDocuments()` | `GET /companies/{id}/documents` (no-op if nothing selected) |
 | `uploadDocuments(files)` | Show uploading rows → multipart POST → refresh list |
+| `ingestUrls(urls)` | `POST …/documents/from-url` → refresh list |
 | `deleteDocument(id)` | `DELETE` then drop the row locally |
 | `updateSuggestedQuestions(questions)` | `PATCH …/widget-config` → replace that company in `companies` |
 
@@ -104,6 +109,7 @@ boundary).
 | company-detail | `GET /api/v1/companies/{id}/documents` | bearer |
 | edit-suggested-questions | `PATCH /api/v1/companies/{id}/widget-config` | bearer |
 | upload-documents | `POST /api/v1/companies/{id}/documents` (multipart `files`) | bearer |
+| add-url-source | `POST /api/v1/companies/{id}/documents/from-url` `{urls}` | bearer |
 | delete-document | `DELETE /api/v1/companies/{id}/documents/{doc_id}` | bearer |
 | api-status | `GET /health` | public (raw `fetch`, no token) |
 
@@ -134,7 +140,7 @@ shipped widget/admin UI.
 
 | Card | How it is opened |
 |---|---|
-| Knowledge base | Company → Documents dropzone |
+| Knowledge base | Company → Documents dropzone and URL form |
 | Embed snippet | Company → copy block |
 | Starter questions | Company → four fields under the snippet; Save |
 | Guide bar | Host page pill; Ctrl/Cmd + / |
@@ -149,9 +155,17 @@ shipped widget/admin UI.
 2. Create prepends the company and auto-selects it (detail pane + snippet appear).
 3. Dropzone accepts `.pdf`, `.md`, `.txt`, `.html`, `.htm`, max 10 MB
    (`validateFiles`). Invalid files stay local (`name: reason`); valid ones POST.
-4. During the request, placeholder rows show a `uploading` pill. The response
-   replaces them with `ready` / `failed` (failed rows show `document.error`).
-5. Copy block holds the documented script tag (see below). Under it, **Starter
+4. **Add URLs** (`features/add-url-source/`) sits under the dropzone. Paste
+   http/https support-page URLs, one per line, max 20 (`validateUrls`).
+   Invalid / non-http / overflow lines stay as `role="alert"` reasons; valid
+   lines `POST …/documents/from-url`. The form clears after a successful
+   submit. Fetch/extract failures still return 201 with per-row `failed`
+   status — those rows show `document.error`.
+5. During a file upload, placeholder rows show a `uploading` pill. The
+   response replaces them with `ready` / `failed` (failed rows show
+   `document.error`). URL documents use the page title as `filename` and
+   render `source_url` as a new-tab link on the row.
+6. Copy block holds the documented script tag (see below). Under it, **Starter
    questions** (`features/edit-suggested-questions/`) offers four optional
    fields (max 120 chars each). Save sends the non-empty trimmed lines
    (`PATCH …/widget-config`). An empty save is valid and clears chips on the
@@ -208,6 +222,16 @@ cd admin && pnpm install && pnpm dev
 Changing `VITE_*` requires a rebuild of the admin image (`docker compose up --build admin`).
 `ADMIN_PASSWORD` / `JWT_SECRET` are **backend** env — see [`05-auth.md`](05-auth.md).
 
+## Tests
+
+```bash
+cd admin && pnpm test
+```
+
+`validateUrls` (valid / invalid / protocol / 20-URL cap) and the URL form
+(submit valid lines to `ingestUrls`, show rejected lines as alerts). Backend
+contracts: [`02-backend.md`](02-backend.md).
+
 ## Failure modes
 
 | Symptom | Cause | What the UI does |
@@ -220,6 +244,9 @@ Changing `VITE_*` requires a rebuild of the admin image (`docker compose up --bu
 | 503 detail under the dropzone | Missing `OPENAI_API_KEY` | Verbatim: `OPENAI_API_KEY is not configured; set it in .env and restart` |
 | Red `failed` pill + reason | Scanned PDF, empty file, unsupported type that slipped past the client | Row stays; batch does not roll back |
 | `{name}: Unsupported file type: .png` / `File exceeds 10 MB` | Client pre-validation | No network request for those files |
+| `{url}: Not a valid URL` / `Only http/https URLs` / `Max 20 URLs per request` | Client `validateUrls` | Invalid lines stay as alerts; valid lines still POST |
+| 503 / network under the URL form | Missing key or backend down | `ingestUrlsError` under the form; dropzone `uploadError` is separate |
+| Red `failed` pill on a URL row | Fetch timeout/4xx, unsupported content type, empty/JS-rendered page | Row stays with `document.error`; other URLs in the batch unaffected |
 | Empty sidebar "No companies yet" | Fresh DB | Dropzone hidden until a company is selected |
 | Empty detail "No documents yet" | Company with `[]` from `GET .../documents` | Dropzone still active |
 | Delete 404 in `documentsError` | Already deleted elsewhere | Next `selectCompany` refreshes the list |

@@ -38,6 +38,7 @@ routes/assist.py          POST /chat (SSE) · POST /hint (JSON)
         chat_graph.py     ChatState · build_chat_graph(retrieval_service)
         hint_chain.py     build_hint_query · generate_hint
         └─▶ services/retrieval_service.py   retrieve(company_id, query, k) → list[Chunk]
+                                            Chunk.source_url from Chroma metadata when present
         └─▶ services/hint_cache.py          sha1 key · TTL · oldest-first eviction
               └─▶ repositories/vector_repo.py   Chroma collection kb_{company_id}
                     └─▶ models/assist.py        ElementDescriptor · PageContext · Chat* · Hint*
@@ -92,9 +93,13 @@ The route uses `graph.astream_events(initial_state, version="v2")` and yields
 only `on_chat_model_stream` events whose `langgraph_node == "generate_answer"`.
 The condense LLM call never leaks tokens into the SSE stream.
 
-Source filenames are collected from the `retrieve` node's `on_chain_end`
-output and **deduplicated in order** (`dict.fromkeys`) for the final `done`
-event.
+Source values are collected from the `retrieve` node's `on_chain_end`
+output as `chunk.source_url or chunk.filename` and **deduplicated in
+order** (`dict.fromkeys`) for the final `done` event. URL-ingested chunks
+carry `source_url` in Chroma metadata; file chunks have no such key and
+fall back to `filename`. Mixed lists are allowed (a URL next to a PDF
+name). Hint `source` still uses `filename` only — the hover label is not
+a link.
 
 `POST` cannot use the browser `EventSource` API (no request body). The Phase 4
 widget — and the Step 8 browser check — read the stream with `fetch` +
@@ -113,13 +118,13 @@ event: token
 data:  click the "Export report" button
 
 event: done
-data: {"sources": ["user-manual.pdf"]}
+data: {"sources": ["https://support.example.com/reset-password", "user-manual.pdf"]}
 ```
 
 | Event | `data` | When |
 |---|---|---|
 | `token` | raw token string (not JSON) | Repeated; only tokens from `generate_answer` |
-| `done` | `{"sources": ["user-manual.pdf"]}` | Always last on success. `sources` is `[]` when the KB is empty |
+| `done` | `{"sources": ["…"]}` | Always last on success. Each value is the chunk **source URL** when the chunk came from a URL ingest (`source_url` metadata), otherwise **filename**. Deduped in retrieval order. `[]` when the KB is empty |
 | `error` | `{"detail": "Chat generation failed"}` | Mid-stream LLM/network failure. HTTP status is already 200; the widget must treat the message as failed |
 
 Empty-KB behavior: retrieval returns `[]`; the answer prompt tells the model
@@ -145,7 +150,7 @@ source = chunks[0].filename if chunks else None
 | Field | Rule |
 |---|---|
 | `hint` | One sentence, ≤ 140 characters after clamp. The prompt already asks for ≤ 140 chars so clamping is a safety net, not the normal path. |
-| `source` | Filename of the top retrieved chunk, or `null` when the KB is empty |
+| `source` | Filename of the top retrieved chunk, or `null` when the KB is empty. Not a URL even when that chunk was URL-ingested — hover hints show a short label, not a link. |
 
 Empty-KB behavior: the prompt says "describe it neutrally from its label
 alone"; `source` is `null`.
@@ -320,6 +325,7 @@ any LLM spend. The Phase 6 "backend re-validates caps" item is already free.
 | `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` | Empty key | Router-level `require_openai_key`. Set the key, `docker compose up -d backend`. |
 | `event: error` then stream close | LLM/network failure after tokens were sent | HTTP status stays 200. Widget must mark the assistant message failed. |
 | Chat answer says docs don't cover it; `done` has `"sources":[]` | Company exists, no ready documents | Expected empty-KB path. |
+| Chat `done.sources` mixes a URL and a filename | Some retrieved chunks have `source_url`, others do not | Expected. Widget renders `http(s)://` values as links and the rest as plain text. |
 | Hint `source: null`, generic label-based sentence | Empty KB | Expected. Prompt falls back to the element label. |
 | Second identical hint is still slow | Different `url` **path**, `selector_path`, or `element.text`; or process restarted | Cache key ignores query string only. Restart clears the in-process store. |
 | Follow-up answer drifts off-topic | Condense rewrite was empty or weak | Node falls back to the raw last user message if the rewrite is blank; otherwise tune `CONDENSE_PROMPT`. |
@@ -335,6 +341,7 @@ Unit tests in `backend/tests/` use in-memory fakes (no Mongo / Chroma / network)
 | `test_hint_cache.py` | Key stability across query-string URL variants; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query prefers `text` then `aria-label`; 140-char clamp; `source: null` on empty KB |
 | `test_chat_graph.py` | Single message skips condense; retrieval called with `(company_id, query, 5)`; answer state non-empty; `assess_page` skips the LLM without captured elements and writes the blocker verdict into `page_state` otherwise |
+| `test_url_ingestion.py` | Chat sources prefer `source_url` over filename and dedupe mixed lists; retrieval mapping covered in `test_retrieval_service.py` |
 
 ```bash
 cd backend && python -m pytest tests/ -v

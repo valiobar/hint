@@ -21,6 +21,23 @@
 	white-space: nowrap;
 }
 
+.sourceUrl {
+	overflow: hidden;
+	color: var(--color-accent);
+	font-size: 0.85rem;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sourceUrl:hover {
+	color: var(--color-accent-hover);
+}
+
+.sourceUrl:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
 .meta {
 	color: var(--color-text-muted);
 	font-size: 0.85rem;

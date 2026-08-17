@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.models.document import DocumentMeta
+from app.models.document import DocumentMeta, SourceType
 
 
 class DocumentRepository:
@@ -11,7 +11,12 @@ class DocumentRepository:
         self.collection = db["documents"]
 
     async def create(
-        self, company_id: str, filename: str, size_bytes: int
+        self,
+        company_id: str,
+        filename: str,
+        size_bytes: int,
+        source_type: SourceType = "file",
+        source_url: str | None = None,
     ) -> DocumentMeta:
         doc = {
             "document_id": f"doc_{secrets.token_hex(6)}",
@@ -20,6 +25,8 @@ class DocumentRepository:
             "size_bytes": size_bytes,
             "chunk_count": 0,
             "status": "processing",
+            "source_type": source_type,
+            "source_url": source_url,
             "error": None,
             "created_at": datetime.now(timezone.utc),
         }

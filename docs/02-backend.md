@@ -1,8 +1,9 @@
 # Hint — Backend (Knowledge Base API)
 
 > **Status: Phase 3 (AI layer) complete.**
-> Covers JWT auth, companies CRUD, document ingestion (parse → chunk → embed → Chroma),
-> retrieval, and the widget-facing chat (SSE) + hint endpoints. AI runtime:
+> Covers JWT auth, companies CRUD, document ingestion (files and support-page
+> URLs → parse → chunk → embed → Chroma), retrieval, and the widget-facing
+> chat (SSE) + hint endpoints. AI runtime:
 > [`06-ai-layer.md`](06-ai-layer.md). Auth contract (seeding, token TTL,
 > protected vs public): [`05-auth.md`](05-auth.md). Admin SPA:
 > [`04-admin.md`](04-admin.md). Stack/env:
@@ -18,7 +19,8 @@ routes/        auth.py · companies.py · widget_config.py · documents.py
                · retrieve.py · assist.py · deps.py
   └─▶ ai/              llm_factory.py · prompts.py · chat_graph.py · hint_chain.py
   └─▶ services/        auth_service.py · company_service.py · ingestion_service.py
-                       · retrieval_service.py · text_extraction.py · hint_cache.py
+                       · retrieval_service.py · text_extraction.py
+                       · url_fetcher.py · page_extraction.py · hint_cache.py
         └─▶ repositories/  user_repo.py · company_repo.py · document_repo.py
                            · vector_repo.py (Chroma adapter)
               └─▶ models/     user.py · company.py · document.py · retrieval.py
@@ -171,6 +173,8 @@ bad file never fails the batch.
     "size_bytes": 482133,
     "chunk_count": 42,
     "status": "ready",
+    "source_type": "file",
+    "source_url": null,
     "error": null,
     "created_at": "2026-08-08T12:01:00Z"
   },
@@ -181,6 +185,8 @@ bad file never fails the batch.
     "size_bytes": 90210,
     "chunk_count": 0,
     "status": "failed",
+    "source_type": "file",
+    "source_url": null,
     "error": "No extractable text (scanned PDF or empty file)",
     "created_at": "2026-08-08T12:01:02Z"
   }
@@ -189,6 +195,74 @@ bad file never fails the batch.
 
 Errors: `401` missing/invalid token · `404` unknown company · `413` file > 10 MB
 (checked before any processing) · `422` no files · `503` `OPENAI_API_KEY` not configured.
+
+`DocumentMeta.source_type` defaults to `"file"` and `source_url` to `null` so
+existing Mongo rows stay valid without a migration.
+
+### POST /api/v1/companies/{company_id}/documents/from-url → 201
+
+Ingest support-website pages as knowledge documents (**single pages, no
+crawling**). Admin JWT required. URLs are fetched sequentially and
+synchronously; one failed page never fails the batch.
+
+```json
+// Request — 1–20 http/https URLs (`IngestUrlsRequest`)
+{"urls": ["https://support.example.com/reset-password"]}
+
+// Response 201 — one DocumentMeta per URL
+[
+  {
+    "document_id": "doc_a1b2c3d4e5f6",
+    "company_id": "cmp_1a2b3c4d",
+    "filename": "Reset Password",
+    "size_bytes": 48213,
+    "chunk_count": 7,
+    "status": "ready",
+    "source_type": "url",
+    "source_url": "https://support.example.com/reset-password",
+    "error": null,
+    "created_at": "2026-08-17T12:01:00Z"
+  },
+  {
+    "document_id": "doc_f6e5d4c3b2a1",
+    "company_id": "cmp_1a2b3c4d",
+    "filename": "https://support.example.com/missing",
+    "size_bytes": 0,
+    "chunk_count": 0,
+    "status": "failed",
+    "source_type": "url",
+    "source_url": "https://support.example.com/missing",
+    "error": "Failed to fetch https://support.example.com/missing: …",
+    "created_at": "2026-08-17T12:01:02Z"
+  }
+]
+```
+
+`filename` is the page title (trafilatura metadata → `<title>` → the URL).
+`source_url` is the URL the admin entered (redirects are followed by httpx;
+the original URL is the stable identifier). Per-URL fetch/extract failures
+come back as `status: "failed"` with a readable `error` — the HTTP request
+itself only fails on validation or an unknown company.
+
+Limits (`backend/app/services/url_fetcher.py`):
+
+| Limit | Value |
+|---|---|
+| Batch size | 1–20 URLs |
+| Content type | `text/html` or `text/plain` only |
+| Page size | 15 MB (`MAX_PAGE_SIZE_BYTES`) |
+| Fetch timeout | 25 s (`FETCH_TIMEOUT_SECONDS`), redirects followed |
+
+Main-article text is extracted with **trafilatura** (nav, header, footer,
+related-articles lists dropped). If trafilatura returns nothing, a stdlib
+tag-stripping fallback (`extract_text` / `_HtmlTextExtractor`) is used.
+JS-rendered pages and empty bodies become `failed` (`EmptyDocumentError`).
+Chunks store `source_url` in Chroma metadata; chat `done.sources` prefers
+it over `filename` ([`06-ai-layer.md`](06-ai-layer.md#sse-protocol--post-apiv1chat-public)).
+
+Errors: `401` missing/invalid token · `404` unknown company · `422` empty
+list, more than 20 URLs, or a non-URL string · `503` `OPENAI_API_KEY` not
+configured. There is no automatic re-fetch — delete and re-add the URL.
 
 ### GET /api/v1/companies/{company_id}/documents → 200
 
@@ -214,13 +288,15 @@ chain consume the same `RetrievalService.retrieve()` unchanged.
 // Response 200
 {
   "chunks": [
-    {"text": "…To export a report, open…", "filename": "user-manual.pdf", "score": 0.31}
+    {"text": "…To export a report, open…", "filename": "user-manual.pdf", "source_url": null, "score": 0.31}
   ]
 }
 ```
 
 - `score` is the raw Chroma cosine **distance** — lower = more similar (not a
   normalized similarity).
+- `source_url` is present when the chunk came from a URL ingest; file chunks
+  omit the Chroma key and map to `null`.
 - An empty knowledge base returns `{"chunks": []}`, not an error.
 
 Errors: `404` unknown `company_id` (validated in-handler since the ID is in the body) ·
@@ -271,13 +347,13 @@ event: token
 data:  click the "Export report" button
 
 event: done
-data: {"sources": ["user-manual.pdf"]}
+data: {"sources": ["https://support.example.com/reset-password", "user-manual.pdf"]}
 ```
 
 | Event | `data` | When |
 |---|---|---|
 | `token` | raw token string | Repeated; only tokens from `generate_answer` (condense never leaks) |
-| `done` | `{"sources": ["user-manual.pdf"]}` | Success. `sources` is `[]` when the KB is empty |
+| `done` | `{"sources": ["…"]}` | Success. Each value is the chunk `source_url` when the chunk came from a URL ingest, otherwise `filename`. Deduped in retrieval order. `[]` when the KB is empty |
 | `error` | `{"detail": "Chat generation failed"}` | Mid-stream LLM/network failure. HTTP status is already 200 |
 
 | Status | `detail` | When |
@@ -346,11 +422,14 @@ Pings Mongo and Chroma. `{"status":"ok","mongo":"ok","chroma":"ok"}`, or 503 wit
 
 ## Ingestion pipeline
 
-`IngestionService.ingest_file(company_id, filename, raw)` runs per file:
+Two entry points share chunking / embedding / Mongo finalize:
+
+### File — `IngestionService.ingest_file(company_id, filename, raw)`
 
 1. **Size gate** — > 10 MB raises (the route pre-checks and returns 413;
    `MAX_FILE_SIZE_BYTES` lives in the service as the single source of truth).
-2. **Mongo record** — `documents` row created with `status: "processing"`.
+2. **Mongo record** — `documents` row created with `status: "processing"`,
+   `source_type: "file"`.
 3. **Extract** (`services/text_extraction.py`) — `pypdf` for PDF; UTF-8 decode
    (`errors="replace"`) for md/txt; a stdlib `HTMLParser` subclass for HTML that skips
    `<script>`/`<style>` (no beautifulsoup/html2text dependency). Unsupported extension
@@ -366,6 +445,28 @@ Pings Mongo and Chroma. `{"status":"ok","mongo":"ok","chroma":"ok"}`, or 503 wit
    record `status: "failed"` with the error reason (truncated to 500 chars) — the
    record survives so the admin UI can display it.
 
+### URL — `IngestionService.ingest_url(company_id, url)`
+
+1. **Fetch** (`services/url_fetcher.py`, **httpx**) — GET with redirects, 25 s
+   timeout, `text/html` / `text/plain` only, 15 MB cap. Failures
+   (`UrlFetchError`: timeout, DNS, 4xx/5xx, wrong type, oversized) create a
+   `failed` row immediately (`filename` = the URL, `size_bytes` = 0).
+2. **Extract** (`services/page_extraction.py`, **trafilatura**) — main-article
+   text + title. Trafilatura `None`/empty → stdlib `extract_text("page.html")`
+   fallback. Title order: trafilatura metadata → `<title>` → the URL.
+   Empty page → `EmptyDocumentError` → `failed` row (`size_bytes` = fetched
+   length). Extraction runs in `asyncio.to_thread` so the event loop is not
+   blocked.
+3. **Mongo record** — `source_type: "url"`, `source_url` = the URL the admin
+   entered, `filename` = title.
+4. **Chunk / embed** — same splitter and collection as files. Chunk metadata
+   adds `"source_url": url`.
+5. **Finalize** — same `ready` / `failed` lifecycle as files.
+
+Dependencies: `httpx>=0.27,<1` and `trafilatura>=2.0,<3` in
+`backend/requirements.txt` (trafilatura pulls `lxml`, `justext`,
+`readability-lxml`, `htmldate`, `courlan`).
+
 ### Document status lifecycle
 
 ```
@@ -373,8 +474,8 @@ processing ──ingestion ok──▶ ready    (chunk_count > 0)
      └───────any failure───▶ failed   (error = reason; chunk_count stays 0)
 ```
 
-There is no retry endpoint in Phase 1 — re-upload the file (new `document_id`) or
-delete the failed record.
+There is no retry endpoint — re-upload the file or re-add the URL (new
+`document_id`) or delete the failed record.
 
 ## Data
 
@@ -383,7 +484,7 @@ delete the failed record.
 | Collection  | Document shape                                                        | Indexes |
 |-------------|-----------------------------------------------------------------------|---------|
 | `companies` | `{company_id, name, created_at, suggested_questions}`                  | `company_id` **unique** |
-| `documents` | `{document_id, company_id, filename, size_bytes, chunk_count, status, error, created_at}` | `document_id` **unique** · `company_id` |
+| `documents` | `{document_id, company_id, filename, size_bytes, chunk_count, status, source_type, source_url, error, created_at}` | `document_id` **unique** · `company_id` |
 | `users`     | `{email, password_hash, created_at}`                                  | `email` **unique** |
 
 ### ChromaDB
@@ -396,7 +497,7 @@ company's chunks.
 |----------|----------------------------------------------------------|
 | ids      | `"{document_id}:{chunk_index}"` (deterministic)          |
 | documents| chunk text (~800 chars, 150 overlap)                     |
-| metadata | `{"document_id": str, "filename": str, "chunk_index": int}` |
+| metadata | `{"document_id": str, "filename": str, "chunk_index": int, "source_url"?: str}` |
 
 ## End-to-end curl walkthrough
 
@@ -445,9 +546,17 @@ curl -s localhost:8000/api/v1/companies/cmp_1a2b3c4d/widget-config
 curl -s -X POST "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
   -H "Authorization: Bearer $TOKEN" \
   -F "files=@user-manual.pdf" -F "files=@faq.md"
-# → [{"document_id":"doc_…","status":"ready","chunk_count":42,…}, {…}]
+# → [{"document_id":"doc_…","status":"ready","chunk_count":42,"source_type":"file",…}, {…}]
 
-# 3. list documents — both "ready"
+# 2b. ingest a support page (single URL, no crawl)
+curl -s -X POST "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents/from-url" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"urls":["https://support.example.com/reset-password"]}'
+# → [{"document_id":"doc_…","status":"ready","source_type":"url",
+#     "source_url":"https://support.example.com/reset-password","filename":"Reset Password",…}]
+
+# 3. list documents — newest first; URL rows include source_url
 curl -s "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
   -H "Authorization: Bearer $TOKEN"
 
@@ -455,7 +564,7 @@ curl -s "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents" \
 curl -s -X POST localhost:8000/api/v1/retrieve \
   -H 'Content-Type: application/json' \
   -d '{"company_id": "cmp_1a2b3c4d", "query": "how do I export a report?", "k": 3}'
-# → {"chunks":[{"text":"…export…","filename":"user-manual.pdf","score":0.31}, …]}
+# → {"chunks":[{"text":"…export…","filename":"user-manual.pdf","source_url":null,"score":0.31}, …]}
 
 # 5. chat streams tokens over SSE (-N disables curl buffering)
 #    Requires a real OPENAI_API_KEY. Public — no token.
@@ -470,7 +579,8 @@ curl -N -s -X POST localhost:8000/api/v1/chat \
        \"messages\":[{\"role\":\"user\",\"content\":\"How do I export a report?\"}],
        \"page_context\":$PAGE_CTX}"
 # → many `event: token` lines arriving progressively; answer references the
-#   "Export report" button; then `event: done` `data: {"sources":["user-manual.pdf"]}`
+#   "Export report" button; then `event: done`
+#   `data: {"sources":["user-manual.pdf"]}`  (URL-backed chunks emit the URL)
 
 # 6. hint — one-liner; second identical call is served from cache
 time curl -s -X POST localhost:8000/api/v1/hint \
@@ -498,6 +608,10 @@ curl -s -o /dev/null -w '%{http_code}' -X DELETE \
   -H "Authorization: Bearer $TOKEN" \
   "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents/doc_xxx"          # 204 (real id) / 404
 # after a 204, /retrieve no longer returns chunks from the deleted document
+curl -s -o /dev/null -w '%{http_code}' -X POST \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"urls":[]}' \
+  "localhost:8000/api/v1/companies/cmp_1a2b3c4d/documents/from-url"          # 422
 curl -s -X POST localhost:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
   -d "{\"company_id\":\"cmp_nope\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}],
@@ -521,6 +635,10 @@ curl -s -X POST localhost:8000/api/v1/hint \
 | Hint `source: null` / chat `done` with `"sources":[]` | Company exists, no ready documents | Expected empty-KB path — model uses the page/label, not invented features |
 | Upload returns `status: "failed"`, error "No extractable text (scanned PDF or empty file)" | Scanned/image-only PDF, or empty file | Expected — no OCR in the POC; response is still 201 with per-file status |
 | Upload returns `status: "failed"`, error "Unsupported file type: .png" | Extension outside pdf/md/txt/html/htm | Batch continues; other files unaffected |
+| `from-url` returns `status: "failed"`, error starts with `Failed to fetch` | Timeout, DNS, 4xx/5xx | Batch still 201; that row is `failed` with the error text |
+| `from-url` returns `status: "failed"`, `Unsupported content type` | PDF/image/JSON served over HTTP | Only `text/html` and `text/plain` are accepted |
+| `from-url` returns `status: "failed"`, empty-document error | JS-rendered page or empty body | Trafilatura and the stdlib fallback both need server-returned text |
+| `422` on `POST …/from-url` | Empty list, >20 URLs, or a non-URL string | Pydantic `IngestUrlsRequest` — no fetch starts |
 | `413 {"detail":"big.pdf exceeds 10 MB"}` | Single file over the 10 MB cap | Whole request rejected before any processing |
 | `404 {"detail":"Unknown company_id"}` | Wrong/missing company slug | Create the company first; IDs are `cmp_`-prefixed |
 | Upload takes seconds | Ingestion is synchronous in-request (accepted POC trade-off) | The `status` field already supports moving to a background queue later without an API change |
@@ -535,7 +653,8 @@ in-memory fakes; no Mongo/Chroma/network needed):
 
 | File | Covers |
 |---|---|
-| `test_text_extraction.py` / `test_ingestion_service.py` / `test_retrieval_service.py` | Phase 1 pipeline |
+| `test_text_extraction.py` / `test_ingestion_service.py` / `test_retrieval_service.py` | Phase 1 pipeline; retrieval maps optional `source_url` |
+| `test_url_ingestion.py` | URL ingest success/fetch errors; trafilatura + fallback; `IngestUrlsRequest` 422; chat sources prefer URL and dedupe |
 | `test_assist_models.py` | Wire-contract caps (41 elements / 2001-char excerpt / empty messages) |
 | `test_hint_cache.py` | Key stability across query-string URLs; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query build; 140-char clamp; `source: null` on empty KB |

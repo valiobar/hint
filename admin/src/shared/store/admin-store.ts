@@ -5,6 +5,7 @@ import {
 	updateWidgetConfig as apiUpdateWidgetConfig,
 	listDocuments,
 	uploadDocuments as apiUploadDocuments,
+	ingestUrls as apiIngestUrls,
 	deleteDocument as apiDeleteDocument,
 	login as apiLogin,
 	fetchMe,
@@ -36,6 +37,8 @@ interface AdminState {
 	documentsError: string | null;
 	uploadingFiles: UploadingFile[];
 	uploadError: string | null;
+	isIngestingUrls: boolean;
+	ingestUrlsError: string | null;
 	isSavingSuggestedQuestions: boolean;
 	suggestedQuestionsError: string | null;
 	login: (email: string, password: string) => Promise<void>;
@@ -46,6 +49,7 @@ interface AdminState {
 	selectCompany: (companyId: string) => Promise<void>;
 	loadDocuments: () => Promise<void>;
 	uploadDocuments: (files: File[]) => Promise<void>;
+	ingestUrls: (urls: string[]) => Promise<void>;
 	deleteDocument: (documentId: string) => Promise<void>;
 	updateSuggestedQuestions: (questions: string[]) => Promise<void>;
 }
@@ -64,6 +68,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 	documentsError: null,
 	uploadingFiles: [],
 	uploadError: null,
+	isIngestingUrls: false,
+	ingestUrlsError: null,
 	isSavingSuggestedQuestions: false,
 	suggestedQuestionsError: null,
 
@@ -94,6 +100,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			documentsError: null,
 			uploadingFiles: [],
 			uploadError: null,
+			isIngestingUrls: false,
+			ingestUrlsError: null,
 			isSavingSuggestedQuestions: false,
 			suggestedQuestionsError: null,
 		});
@@ -136,6 +144,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			documents: [],
 			documentsError: null,
 			uploadError: null,
+			ingestUrlsError: null,
 			suggestedQuestionsError: null,
 		});
 		await get().loadDocuments();
@@ -175,6 +184,22 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			set({ uploadError: toErrorMessage(err) });
 		} finally {
 			set({ uploadingFiles: [] });
+		}
+	},
+
+	ingestUrls: async (urls) => {
+		const companyId = get().selectedCompanyId;
+		if (!companyId || urls.length === 0) {
+			return;
+		}
+		set({ isIngestingUrls: true, ingestUrlsError: null });
+		try {
+			await apiIngestUrls(companyId, urls);
+			await get().loadDocuments();
+		} catch (err) {
+			set({ ingestUrlsError: toErrorMessage(err) });
+		} finally {
+			set({ isIngestingUrls: false });
 		}
 	},
 

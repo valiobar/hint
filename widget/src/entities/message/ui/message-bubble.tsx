@@ -14,6 +14,18 @@ interface MessageBubbleProps {
 	children: ReactNode;
 }
 
+const isUrlSource = (source: string): boolean =>
+	source.startsWith('http://') || source.startsWith('https://');
+
+const formatSourceLabel = (source: string): string => {
+	try {
+		const parsed = new URL(source);
+		return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+	} catch {
+		return source;
+	}
+};
+
 export const MessageBubble = ({
 	role,
 	isFailed,
@@ -64,7 +76,25 @@ export const MessageBubble = ({
 			)}
 			{sources && sources.length > 0 && (
 				<p className={styles.sources} data-testid="message-sources">
-					From: {sources.join(', ')}
+					From:{' '}
+					{sources.map((source, index) => (
+						<span key={source}>
+							{index > 0 && ', '}
+							{isUrlSource(source) ? (
+								<a
+									href={source}
+									target="_blank"
+									rel="noopener noreferrer"
+									className={styles.sourceLink}
+									data-testid="message-source-link"
+								>
+									{formatSourceLabel(source)}
+								</a>
+							) : (
+								source
+							)}
+						</span>
+					))}
 				</p>
 			)}
 			{copyText && (

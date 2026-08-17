@@ -4,6 +4,7 @@ import { DeleteDocumentButton } from '@/features/delete-document';
 import { EmbedSnippet } from '@/features/copy-embed-snippet';
 import { SuggestedQuestionsForm } from '@/features/edit-suggested-questions';
 import { FileDropzone } from '@/features/upload-documents';
+import { UrlSourceForm } from '@/features/add-url-source';
 import { useAdminStore } from '@/shared/store/admin-store';
 import { Spinner, StatusPill } from '@/shared/ui';
 import { formatBytes } from '@/shared/lib/format-bytes';
@@ -42,6 +43,7 @@ export const CompanyDetail = () => {
 			<SuggestedQuestionsForm />
 			<h3>Documents</h3>
 			<FileDropzone />
+			<UrlSourceForm />
 			{isLoadingDocuments && <Spinner />}
 			{documentsError && (
 				<p className={styles.error} role="alert">

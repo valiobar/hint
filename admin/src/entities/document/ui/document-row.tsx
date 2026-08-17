@@ -13,6 +13,17 @@ export const DocumentRow = ({ document, actions }: DocumentRowProps) => (
 	<li className={styles.row} data-testid={`document-row-${document.document_id}`}>
 		<div className={styles.main}>
 			<span className={styles.filename}>{document.filename}</span>
+			{document.source_type === 'url' && document.source_url && (
+				<a
+					className={styles.sourceUrl}
+					href={document.source_url}
+					target="_blank"
+					rel="noopener noreferrer"
+					data-testid={`document-source-url-${document.document_id}`}
+				>
+					{document.source_url}
+				</a>
+			)}
 			<span className={styles.meta}>
 				{formatBytes(document.size_bytes)} · {document.chunk_count} chunks
 			</span>

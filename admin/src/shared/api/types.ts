@@ -7,6 +7,8 @@ export interface Company {
 
 export type DocumentStatus = 'processing' | 'ready' | 'failed';
 
+export type SourceType = 'file' | 'url';
+
 export interface DocumentMeta {
 	document_id: string;
 	company_id: string;
@@ -14,6 +16,8 @@ export interface DocumentMeta {
 	size_bytes: number;
 	chunk_count: number;
 	status: DocumentStatus;
+	source_type: SourceType;
+	source_url: string | null;
 	error: string | null;
 	created_at: string;
 }

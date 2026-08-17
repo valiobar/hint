@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.models.company import Company
-from app.models.document import DocumentMeta
+from app.models.document import DocumentMeta, IngestUrlsRequest
 from app.repositories.document_repo import DocumentRepository
 from app.routes.deps import (
     get_document_repo,
@@ -46,6 +46,23 @@ async def upload_documents(
             )
         )
     return results
+
+
+@router.post(
+    "/from-url",
+    response_model=list[DocumentMeta],
+    status_code=201,
+    dependencies=[Depends(require_openai_key)],
+)
+async def ingest_urls(
+    body: IngestUrlsRequest,
+    company: Company = Depends(require_company),
+    svc: IngestionService = Depends(get_ingestion_service),
+) -> list[DocumentMeta]:
+    return [
+        await svc.ingest_url(company.company_id, str(url))
+        for url in body.urls
+    ]
 
 
 @router.get("", response_model=list[DocumentMeta])

@@ -54,6 +54,16 @@
 	margin: 0;
 }
 
+.sourceLink {
+	color: var(--hint-text-muted);
+	text-decoration: underline;
+}
+
+.sourceLink:hover,
+.sourceLink:focus-visible {
+	color: var(--hint-accent);
+}
+
 .copyButton {
 	display: inline-flex;
 	align-items: center;

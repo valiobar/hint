@@ -55,7 +55,9 @@ async def chat(
                         yield {"event": "token", "data": token}
                 elif kind == "on_chain_end" and event.get("name") == RETRIEVE_NODE:
                     chunks = event["data"]["output"]["chunks"]
-                    sources = list(dict.fromkeys(c.filename for c in chunks))
+                    sources = list(
+                        dict.fromkeys(c.source_url or c.filename for c in chunks)
+                    )
         except Exception:  # noqa: BLE001 — stream already committed 200
             yield {
                 "event": "error",
