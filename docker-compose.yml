@@ -44,8 +44,8 @@ services:
     build:
       context: ./admin
       args:
-        VITE_API_URL: http://localhost:8000
-        VITE_WIDGET_CDN_URL: http://localhost:1337
+        VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}"
+        VITE_WIDGET_CDN_URL: "${VITE_WIDGET_CDN_URL:-http://localhost:1337}"
     ports: ["3001:80"]
     depends_on: [backend]
     networks: [hint-network]
