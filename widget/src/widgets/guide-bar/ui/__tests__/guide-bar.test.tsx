@@ -97,3 +97,52 @@ describe('GuideBar drag-to-dock', () => {
 		expect(bar.className).not.toContain('dockedLeft');
 	});
 });
+
+describe('GuideBar onboarding affordances', () => {
+	beforeEach(() => {
+		useHintStore.setState({
+			dockSide: 'right',
+			dockTopFraction: 0.5,
+			isDisabled: false,
+			hasSeenIntro: false,
+		});
+	});
+
+	it('pulses the sparkle button before the intro has been seen', () => {
+		render(<GuideBar />);
+		const sparkle = screen.getByTestId('guide-bar-chat-toggle');
+
+		expect(sparkle.className).toContain('attention');
+	});
+
+	it('stops pulsing the sparkle button after the intro has been seen', () => {
+		useHintStore.setState({ hasSeenIntro: true });
+		render(<GuideBar />);
+		const sparkle = screen.getByTestId('guide-bar-chat-toggle');
+
+		expect(sparkle.className).not.toContain('attention');
+	});
+
+	it('does not pulse the sparkle button while the widget is disabled', () => {
+		useHintStore.setState({ isDisabled: true });
+		render(<GuideBar />);
+		const sparkle = screen.getByTestId('guide-bar-chat-toggle');
+
+		expect(sparkle.className).not.toContain('attention');
+	});
+
+	it('exposes tooltip labels on both action buttons', () => {
+		render(<GuideBar />);
+
+		expect(
+			screen.getByTestId('guide-bar-chat-toggle').getAttribute(
+				'data-tooltip',
+			),
+		).toBe('Ask Hint anything');
+		expect(
+			screen.getByTestId('guide-bar-hints-toggle').getAttribute(
+				'data-tooltip',
+			),
+		).toBe('Explain elements on hover');
+	});
+});

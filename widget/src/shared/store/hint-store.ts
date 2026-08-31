@@ -8,6 +8,10 @@ import { streamChat, ApiError } from '@/shared/api';
 import type { WireChatMessage, ChatDonePayload } from '@/shared/api/types';
 import { MAX_MESSAGES, MAX_MESSAGE_CHARS } from '@/shared/api/types';
 import { extractPageContext } from '@/shared/lib/page-context';
+import {
+	isIntroComplete,
+	recordIntroOpen,
+} from '@/shared/lib/intro-storage';
 import { WIDGET_CONFIG } from '@/shared/config';
 
 // sessionStorage can throw in sandboxed iframes / strict privacy modes —
@@ -75,6 +79,13 @@ interface HintState {
 	/** Guide bar center Y as a fraction of the viewport height. */
 	dockTopFraction: number;
 	walkthrough: WalkthroughState | null;
+	/**
+	 * Hide intro UI for this page load. Starts false for the first 5
+	 * page opens (counted in localStorage); true after that, or after
+	 * dismiss / panel open this session.
+	 */
+	hasSeenIntro: boolean;
+	markIntroSeen: () => void;
 	openPanel: () => void;
 	closePanel: () => void;
 	togglePanel: () => void;
@@ -103,6 +114,14 @@ const toWireMessages = (messages: UiChatMessage[]): WireChatMessage[] =>
 const createId = (): string =>
 	`msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+// Count this page load toward the 5-open intro budget before the store
+// is created so hasSeenIntro reflects whether the callout should appear.
+const introCompanyId = WIDGET_CONFIG?.companyId;
+const introAlreadyComplete = isIntroComplete(introCompanyId);
+if (!introAlreadyComplete) {
+	recordIntroOpen(introCompanyId);
+}
+
 export const useHintStore = create<HintState>()(
 	persist(
 		(set, get) => ({
@@ -116,10 +135,27 @@ export const useHintStore = create<HintState>()(
 			dockSide: 'right',
 			dockTopFraction: 0.5,
 			walkthrough: null,
+			hasSeenIntro: introAlreadyComplete,
 
-			openPanel: () => set({ isOpen: true }),
+			markIntroSeen: () => {
+				// Session-only: remaining opens can still show the intro
+				// on a later page load until the open budget is spent.
+				if (get().hasSeenIntro) {
+					return;
+				}
+				set({ hasSeenIntro: true });
+			},
+			openPanel: () => {
+				get().markIntroSeen();
+				set({ isOpen: true });
+			},
 			closePanel: () => set({ isOpen: false }),
-			togglePanel: () => set((s) => ({ isOpen: !s.isOpen })),
+			togglePanel: () => {
+				if (!get().isOpen) {
+					get().markIntroSeen();
+				}
+				set((s) => ({ isOpen: !s.isOpen }));
+			},
 			toggleHintMode: () =>
 				set((s) => ({ isHintModeEnabled: !s.isHintModeEnabled })),
 			showHint: (rect, text) => set({ activeHint: { rect, text } }),
@@ -268,6 +304,8 @@ export const useHintStore = create<HintState>()(
 			// Persist only durable state; transient flags always rehydrate fresh.
 			// Dropping empty messages also discards a mid-stream placeholder
 			// if the page reloaded while an answer was streaming.
+			// Intro open-count lives in localStorage (intro-storage.ts), not
+			// here — hasSeenIntro is session UI only after each page open.
 			partialize: (s) => ({
 				messages: s.messages
 					.filter((m) => m.content.length > 0)

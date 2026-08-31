@@ -38,10 +38,16 @@
 		transform var(--hint-duration-snap) var(--hint-ease-spring),
 		border-radius var(--hint-duration-slow) var(--hint-ease),
 		box-shadow var(--hint-duration-slow) var(--hint-ease);
-	/* Entrance: soft pop shortly after load. Direction-agnostic so it
-	   never replays when the dock side changes. `backwards` keeps the
-	   bar hidden during the delay. */
-	animation: barIn 320ms var(--hint-ease) 300ms backwards;
+	/* Entrance: soft pop. Delay lives on `.firstVisit` so returning
+	   visitors get the same quiet pop with no wait. `backwards` keeps
+	   the bar hidden during the delay. Direction-agnostic so it never
+	   replays when the dock side changes. */
+	animation: barIn 320ms var(--hint-ease) backwards;
+}
+
+/* First visit: delayed pop that chains into the intro callout */
+.firstVisit {
+	animation-delay: 300ms;
 }
 
 .grip {
@@ -138,4 +144,55 @@
 
 .disabled {
 	opacity: 0.5;
+}
+
+.attention {
+	animation: pulseRing 2s var(--hint-ease) infinite;
+}
+
+@keyframes pulseRing {
+	0% {
+		box-shadow: 0 0 0 0 rgb(79 70 229 / 0.45);
+	}
+
+	70% {
+		box-shadow: 0 0 0 8px rgb(79 70 229 / 0);
+	}
+
+	100% {
+		box-shadow: 0 0 0 0 rgb(79 70 229 / 0);
+	}
+}
+
+.barButton[data-tooltip] {
+	position: relative;
+}
+
+.barButton[data-tooltip]::after {
+	content: attr(data-tooltip);
+	position: absolute;
+	right: calc(100% + var(--hint-space-2));
+	top: 50%;
+	translate: 0 -50%;
+	white-space: nowrap;
+	padding: var(--hint-space-1) var(--hint-space-2);
+	background: var(--hint-text);
+	color: var(--hint-surface);
+	border-radius: var(--hint-radius-sm);
+	font-size: 0.75rem;
+	z-index: var(--hint-z-tooltip);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--hint-duration-base) var(--hint-ease) 300ms;
+}
+
+.barButton[data-tooltip]:hover:not(:disabled):not(.active)::after,
+.barButton[data-tooltip]:focus-visible:not(:disabled):not(.active)::after {
+	opacity: 1;
+}
+
+/* Flip inward when docked left */
+.dockedLeft .barButton[data-tooltip]::after {
+	right: auto;
+	left: calc(100% + var(--hint-space-2));
 }
