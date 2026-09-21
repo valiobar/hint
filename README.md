@@ -52,7 +52,8 @@ docker compose up -d
 ```
 
 On a remote host, keep the same ports and replace `localhost` with that
-IP. See [Deploying beyond localhost](#deploying-beyond-localhost).
+IP. Production (DigitalOcean droplet, GHCR + `deploy.sh`) is documented
+in [`docs/deployment.md`](docs/deployment.md).
 
 ## Try it (Admin → Demo → widget)
 
@@ -128,36 +129,25 @@ Admin copies this with the selected `company_id` baked in:
 - `loader.js` is `Cache-Control: no-store`; it injects the current
   hashed `hint-widget.{hash}.js` from the same CDN path (`/embed/v1/`).
 
-## Deploying beyond localhost
+## Deploying to production
 
-Admin **bakes** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at **image
-build** time (`docker-compose.yml` build args). The browser uses those
-values, not “whatever host you opened”. If they stay
-`http://localhost:8000`, login from another machine calls *that
-machine’s* localhost and fails.
+Same operational model as vbar-viber-bot: GitHub Actions builds images,
+pushes them to GHCR (`ghcr.io/valiobar/hint-<service>:<sha>` and
+`:latest`), then SSH-runs root `deploy.sh` on the VPS. The droplet
+**never builds** app images.
 
-For a public IP (example `YOUR_IP`):
+Full operator checklist (droplet bootstrap, GitHub secrets, first
+deploy): [`docs/deployment.md`](docs/deployment.md).
 
-1. Quote the URLs in compose (YAML treats `:port` as nested mapping
-   otherwise):
+Admin and demo **bake** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at
+**image build** time. In production those are GitHub Actions secrets
+(the VPS `.env` cannot change already-built JS). Example for droplet
+`159.89.26.67`:
 
-   ```yaml
-   args:
-     VITE_API_URL: "http://YOUR_IP:8000"
-     VITE_WIDGET_CDN_URL: "http://YOUR_IP:1337"
-   ```
-
-2. Point `demo/index.html` (and any embed snippet) at the same host —
-   not `localhost`.
-3. Rebuild admin so the JS bundle picks up the args:
-
-   ```bash
-   docker compose build --no-cache admin
-   docker compose up -d
-   ```
-
-4. Open Demo as `http://YOUR_IP:3002/?company_id=cmp_…` using a company
-   created **on that server**.
+```
+VITE_API_URL=http://159.89.26.67:8000
+VITE_WIDGET_CDN_URL=http://159.89.26.67:1337
+```
 
 Change `JWT_SECRET` before anyone else can reach Admin. OpenAI usage is
 billed to the key in `.env`.
@@ -169,6 +159,7 @@ backend; the variables below are the ones you normally set on the host.
 
 | Variable | Default | Consumed by | Notes |
 |---|---|---|---|
+| `IMAGE_TAG` | `latest` | compose (prod) | GHCR tag; CI writes the git SHA into the VPS `.env` |
 | `ADMIN_PASSWORD` | `""` | backend | **Required** for admin login; empty skips seeding and every login is 401 |
 | `ADMIN_EMAIL` | `admin@hint.local` | backend | Preset admin email (normalized to lowercase) |
 | `JWT_SECRET` | `dev-insecure-secret-change-me` | backend | Change before any shared/deployed stack |
@@ -182,8 +173,8 @@ backend; the variables below are the ones you normally set on the host.
 | `MONGODB_URL` | set by compose | backend | Override only for local (non-Docker) runs |
 | `MONGODB_DB_NAME` | `hint` (compose) | backend | Database name |
 | `CHROMA_HOST` / `CHROMA_PORT` | set by compose | backend | Override only for local runs |
-| `VITE_API_URL` | `http://localhost:8000` | admin (build arg) | Admin → backend URL + snippet `data-hint-api-url` |
-| `VITE_WIDGET_CDN_URL` | `http://localhost:1337` | admin (build arg) | Embed snippet CDN base |
+| `VITE_API_URL` | `http://localhost:8000` | admin + demo (build arg) | Admin → backend URL + snippet `data-hint-api-url`. Production: GitHub secret, inlined at image build |
+| `VITE_WIDGET_CDN_URL` | `http://localhost:1337` | admin + demo (build arg) | Embed snippet CDN base. Production: GitHub secret, inlined at image build |
 
 ## Local frontend dev (optional)
 
@@ -276,6 +267,7 @@ history, hint cache is in-process.
 | Doc | Content |
 |---|---|
 | [`docs/HOW_TO_PLAY.md`](docs/HOW_TO_PLAY.md) | Product walkthrough and feature checklist |
+| [`docs/deployment.md`](docs/deployment.md) | Production: GHCR images, `deploy.sh`, droplet + GitHub secrets |
 | [`docs/01-architecture-overview.md`](docs/01-architecture-overview.md) | Stack, ports, widget inventory |
 | [`docs/02-backend.md`](docs/02-backend.md) | API + ingestion |
 | [`docs/04-admin.md`](docs/04-admin.md) | Admin SPA |

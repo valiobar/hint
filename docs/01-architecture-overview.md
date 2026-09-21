@@ -75,7 +75,9 @@ host page <script src=".../loader.js" data-hint-company-id="abc"> (singleton gua
 
 ## Compose service map
 
-Defined in `docker-compose.yml` (project name `hint`):
+Defined in `docker-compose.yml` (local builds) and
+`infrastructure/docker-compose.yml` (production GHCR images). Project
+name `hint`. See [`deployment.md`](deployment.md).
 
 | Service      | Build / image                   | Host port | Depends on                            | Volumes                    |
 |--------------|---------------------------------|-----------|----------------------------------------|----------------------------|
