@@ -31,6 +31,6 @@
 
 .uploading {
 	background: var(--color-accent-soft);
-	color: #cbbdff;
-	border-color: rgb(124 92 255 / 0.32);
+	color: var(--color-code-text);
+	border-color: color-mix(in srgb, var(--color-accent) 32%, var(--color-border));
 }

@@ -1,18 +1,35 @@
 .sidebar {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	gap: var(--space-5);
 	padding: var(--space-5);
 	background: var(--color-surface);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-xl);
-	box-shadow: var(--shadow);
-	position: sticky;
-	top: 5.25rem;
+	border-right: 1px solid var(--color-border);
+}
+
+.brand {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.product {
+	margin: 0;
+	color: var(--color-text);
+	font-size: 1.05rem;
+	font-weight: 750;
+	letter-spacing: -0.03em;
+}
+
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
 }
 
 .heading h2,
-.kicker {
+.kicker,
+.docsHeading {
 	margin: 0;
 }
 
@@ -24,8 +41,9 @@
 	text-transform: uppercase;
 }
 
-.heading h2 {
-	font-size: 1.15rem;
+.heading h2,
+.docsHeading {
+	font-size: 1.05rem;
 	font-weight: 750;
 	letter-spacing: -0.03em;
 }
@@ -43,4 +61,17 @@
 	margin: 0;
 	color: var(--color-error);
 	font-size: 0.85rem;
+}
+
+.docsHint {
+	margin: 0;
+	color: var(--color-text-muted);
+	font-size: 0.85rem;
+}
+
+@media (max-width: 48rem) {
+	.sidebar {
+		border-right: 0;
+		border-bottom: 1px solid var(--color-border);
+	}
 }

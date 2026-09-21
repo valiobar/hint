@@ -1,12 +1,19 @@
-.badge {
+.row {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.chip {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-2);
 	padding: 0.3rem 0.65rem;
-	background: rgb(255 255 255 / 0.04);
-	border: 1px solid var(--color-border);
+	background: var(--color-code-bg);
+	border: 1px solid transparent;
 	border-radius: var(--radius-pill);
-	color: var(--color-text-soft);
+	color: var(--color-code-text);
 	font-family: var(--font-mono);
 	font-size: 0.75rem;
 }
@@ -33,4 +40,14 @@
 
 .error {
 	background: var(--color-error);
+}
+
+.chip.ok,
+.chip.degraded,
+.chip.error,
+.chip.loading {
+	background: var(--color-surface);
+	border-color: var(--color-border);
+	color: var(--color-text-soft);
+	box-shadow: none;
 }
