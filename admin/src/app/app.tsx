@@ -50,7 +50,7 @@ export const App = () => {
 						<ApiStatusBadge />
 						<span className={styles.adminEmail}>{adminEmail}</span>
 						<ThemeToggle />
-						<Button variant="ghost" onClick={logout}>
+						<Button variant="chip" onClick={logout}>
 							Sign out
 						</Button>
 					</div>

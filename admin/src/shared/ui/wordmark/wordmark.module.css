@@ -6,7 +6,6 @@
 	font-weight: 800;
 	letter-spacing: -0.04em;
 	line-height: 1;
-	text-transform: lowercase;
 }
 
 .sm {
@@ -18,9 +17,9 @@
 }
 
 .mark {
-	width: 0.7em;
-	height: 0.7em;
+	width: 0.72em;
+	height: 0.72em;
 	border-radius: 0.22em;
-	background: linear-gradient(160deg, #b49cff 0%, var(--color-accent) 70%);
+	background: var(--color-accent);
 	box-shadow: 0 0 0 3px var(--color-accent-soft);
 }

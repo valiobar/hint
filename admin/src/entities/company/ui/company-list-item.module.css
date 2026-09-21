@@ -7,7 +7,7 @@
 	padding: 0.7rem 0.85rem;
 	border: 1px solid transparent;
 	border-radius: var(--radius);
-	background: var(--color-bg-elevated);
+	background: transparent;
 	color: var(--color-text);
 	text-align: left;
 	cursor: pointer;
@@ -22,8 +22,7 @@
 
 .itemSelected {
 	background: var(--color-accent-soft);
-	border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
-	box-shadow: 0 0 0 1px rgb(124 92 255 / 0.12);
+	border-color: transparent;
 }
 
 .item:focus-visible,

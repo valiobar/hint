@@ -18,7 +18,7 @@ export const ThemeToggle = () => {
 
 	return (
 		<Button
-			variant="ghost"
+			variant="chip"
 			onClick={handleToggle}
 			aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
 		>

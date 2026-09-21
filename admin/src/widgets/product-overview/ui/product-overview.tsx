@@ -14,10 +14,9 @@ export const ProductOverview = () => {
 					In-app guidance from your product docs
 				</h2>
 				<p className={styles.lead}>
-					Hint is an embeddable assistant for SaaS apps. You upload
-					the product manual here; customers get a floating guide
-					bar in your app that answers questions from those docs
-					and the page they are on.
+					You upload the product manual here. Customers get a
+					floating guide bar in your app that answers from those
+					docs and the page they are on.
 				</p>
 				<p className={styles.cta}>
 					Select a company on the left — or create one — to manage

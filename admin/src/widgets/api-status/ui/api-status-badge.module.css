@@ -2,25 +2,25 @@
 	display: inline-flex;
 	align-items: center;
 	flex-wrap: wrap;
-	gap: var(--space-2);
+	gap: 0.4rem;
 }
 
 .chip {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-2);
-	padding: 0.3rem 0.65rem;
+	gap: 0.4rem;
+	padding: 0.25rem 0.65rem;
 	background: var(--color-code-bg);
 	border: 1px solid transparent;
 	border-radius: var(--radius-pill);
 	color: var(--color-code-text);
 	font-family: var(--font-mono);
-	font-size: 0.75rem;
+	font-size: 0.72rem;
 }
 
 .dot {
-	width: 0.5rem;
-	height: 0.5rem;
+	width: 0.45rem;
+	height: 0.45rem;
 	border-radius: 50%;
 	background: #6b7280;
 }
@@ -31,7 +31,6 @@
 
 .ok {
 	background: var(--color-ok);
-	box-shadow: 0 0 0 3px var(--color-ok-soft);
 }
 
 .degraded {
@@ -46,8 +45,6 @@
 .chip.degraded,
 .chip.error,
 .chip.loading {
-	background: var(--color-surface);
-	border-color: var(--color-border);
-	color: var(--color-text-soft);
-	box-shadow: none;
+	background: var(--color-code-bg);
+	color: var(--color-code-text);
 }

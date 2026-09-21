@@ -21,13 +21,11 @@ export const CompaniesSidebar = () => {
 		<aside className={styles.sidebar} data-testid="companies-sidebar">
 			<div className={styles.brand}>
 				<Wordmark size="sm" />
-				<p className={styles.product}>Hint Admin</p>
 			</div>
 			<section className={styles.section} aria-labelledby="companies-heading">
-				<div className={styles.heading}>
-					<p className={styles.kicker}>Workspace</p>
-					<h2 id="companies-heading">Companies</h2>
-				</div>
+				<h2 id="companies-heading" className={styles.heading}>
+					Companies
+				</h2>
 				<CreateCompanyForm />
 				{isLoadingCompanies && <Spinner />}
 				{companiesError && (
@@ -53,18 +51,12 @@ export const CompaniesSidebar = () => {
 				</ul>
 			</section>
 			<section className={styles.section} aria-labelledby="content-docs-heading">
-				<h2 id="content-docs-heading" className={styles.docsHeading}>
+				<h2 id="content-docs-heading" className={styles.heading}>
 					Content Docs
 				</h2>
-				{selectedCompanyId ? (
-					<p className={styles.docsHint}>
-						Company selected — documents are on the right.
-					</p>
-				) : (
-					<p className={styles.docsHint}>
-						Nothing selected — overview on the right.
-					</p>
-				)}
+				<p className={styles.docsHint}>
+					Nothing selected — overview on the right.
+				</p>
 			</section>
 		</aside>
 	);

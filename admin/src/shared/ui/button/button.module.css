@@ -42,6 +42,21 @@
 	border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
 }
 
+.chip {
+	min-height: 1.7rem;
+	padding: 0.25rem 0.7rem;
+	background: var(--color-code-bg);
+	border-color: transparent;
+	color: var(--color-code-text);
+	font-size: 0.75rem;
+	font-weight: 650;
+	box-shadow: none;
+}
+
+.chip:hover:not(:disabled) {
+	filter: brightness(0.97);
+}
+
 .button:focus-visible {
 	outline: 2px solid var(--color-accent);
 	outline-offset: 3px;

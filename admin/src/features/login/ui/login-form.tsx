@@ -31,7 +31,7 @@ export const LoginForm = () => {
 			onSubmit={handleSubmit}
 			data-testid="login-form"
 		>
-			<Wordmark />
+			<Wordmark label="hint" />
 			<p className={styles.kicker}>Admin</p>
 			<h1>Hint Admin</h1>
 			<p className={styles.lead}>
