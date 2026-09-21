@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { LoginForm } from '@/features/login';
 import { setUnauthorizedHandler } from '@/shared/api';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Button } from '@/shared/ui';
+import { Button, Wordmark } from '@/shared/ui';
 import { ApiStatusBadge } from '@/widgets/api-status';
 import { CompaniesSidebar } from '@/widgets/companies-sidebar';
 import { CompanyDetail } from '@/widgets/company-detail';
@@ -40,21 +40,22 @@ export const App = () => {
 	return (
 		<div className={styles.layout}>
 			<header className={styles.header}>
-				<h1 className={styles.title}>Hint Admin</h1>
+				<div className={styles.brand}>
+					<Wordmark size="sm" />
+					<h1 className={styles.title}>Hint Admin</h1>
+				</div>
 				<div className={styles.headerActions}>
 					<ApiStatusBadge />
 					<span className={styles.adminEmail}>{adminEmail}</span>
-					<Button onClick={logout}>Sign out</Button>
+					<Button variant="ghost" onClick={logout}>
+						Sign out
+					</Button>
 				</div>
 			</header>
 			<div className={styles.panes}>
 				<CompaniesSidebar />
 				<main className={styles.main}>
-					{selectedCompanyId ? (
-						<CompanyDetail />
-					) : (
-						<ProductOverview />
-					)}
+					{selectedCompanyId ? <CompanyDetail /> : <ProductOverview />}
 				</main>
 			</div>
 		</div>

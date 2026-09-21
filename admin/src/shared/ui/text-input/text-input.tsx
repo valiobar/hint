@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import styles from './text-input.module.css';
 
 interface TextInputProps {
+	id?: string;
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
@@ -10,6 +11,7 @@ interface TextInputProps {
 }
 
 export const TextInput = ({
+	id,
 	value,
 	onChange,
 	placeholder,
@@ -22,6 +24,7 @@ export const TextInput = ({
 
 	return (
 		<input
+			id={id}
 			type={type}
 			className={styles.input}
 			value={value}

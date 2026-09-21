@@ -9,6 +9,10 @@
 	margin: 0;
 }
 
+.section h3 {
+	letter-spacing: -0.03em;
+}
+
 .section p {
 	color: var(--color-text-muted);
 }

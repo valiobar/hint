@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Button, TextInput } from '@/shared/ui';
+import { Button, TextInput, Wordmark } from '@/shared/ui';
 import { loginSchema } from '../model/schema';
 import styles from './login-form.module.css';
 
@@ -31,7 +31,13 @@ export const LoginForm = () => {
 			onSubmit={handleSubmit}
 			data-testid="login-form"
 		>
+			<Wordmark />
+			<p className={styles.kicker}>Admin</p>
 			<h1>Hint Admin</h1>
+			<p className={styles.lead}>
+				In-app AI guidance grounded in your docs and the live page.
+				Sign in to manage companies and the embed.
+			</p>
 			<TextInput
 				value={email}
 				onChange={setEmail}
@@ -45,7 +51,7 @@ export const LoginForm = () => {
 				placeholder="Password"
 				aria-label="Password"
 			/>
-			<Button type="submit" disabled={isAuthenticating}>
+			<Button type="submit" disabled={isAuthenticating} className={styles.submit}>
 				{isAuthenticating ? 'Signing in…' : 'Sign in'}
 			</Button>
 			{(error ?? authError) && (

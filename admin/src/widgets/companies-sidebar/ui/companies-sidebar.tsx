@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { CompanyListItem } from '@/entities/company';
 import { CreateCompanyForm } from '@/features/create-company';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Spinner } from '@/shared/ui';
+import { EmptyState, Spinner } from '@/shared/ui';
 import styles from './companies-sidebar.module.css';
 
 export const CompaniesSidebar = () => {
@@ -19,6 +19,10 @@ export const CompaniesSidebar = () => {
 
 	return (
 		<aside className={styles.sidebar} data-testid="companies-sidebar">
+			<div className={styles.heading}>
+				<p className={styles.kicker}>Workspace</p>
+				<h2>Companies</h2>
+			</div>
 			<CreateCompanyForm />
 			{isLoadingCompanies && <Spinner />}
 			{companiesError && (
@@ -27,9 +31,9 @@ export const CompaniesSidebar = () => {
 				</p>
 			)}
 			{!isLoadingCompanies && companies.length === 0 && !companiesError && (
-				<p className={styles.empty}>
-					No companies yet — create the first one above.
-				</p>
+				<EmptyState title="No companies yet">
+					Create the first one above.
+				</EmptyState>
 			)}
 			<ul className={styles.list}>
 				{companies.map((company) => (
