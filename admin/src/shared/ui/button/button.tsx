@@ -6,6 +6,8 @@ interface ButtonProps {
 	disabled?: boolean;
 	children: ReactNode;
 	onClick?: () => void;
+	variant?: 'primary' | 'ghost';
+	className?: string;
 }
 
 export const Button = ({
@@ -13,11 +15,15 @@ export const Button = ({
 	disabled = false,
 	children,
 	onClick,
+	variant = 'primary',
+	className,
 }: ButtonProps) => (
 	<button
 		type={type}
 		disabled={disabled}
-		className={styles.button}
+		className={[styles.button, styles[variant], className]
+			.filter(Boolean)
+			.join(' ')}
 		onClick={onClick}
 		data-testid="button"
 	>

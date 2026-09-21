@@ -6,19 +6,33 @@
 
 .zone,
 .zoneActive {
-	padding: var(--space-4);
-	border: 1px dashed var(--color-border);
-	border-radius: var(--radius);
-	background: var(--color-surface);
+	padding: var(--space-6) var(--space-4);
+	border: 1px dashed var(--color-border-strong);
+	border-radius: var(--radius-lg);
+	background:
+		radial-gradient(
+			80% 120% at 50% 0%,
+			var(--color-accent-soft),
+			transparent 60%
+		),
+		var(--color-bg-elevated);
 	color: var(--color-text-muted);
 	text-align: center;
 	cursor: pointer;
+	transition:
+		border-color var(--duration) var(--ease),
+		color var(--duration) var(--ease);
 }
 
 .zoneActive {
 	border-color: var(--color-accent);
-	background: var(--color-bg);
 	color: var(--color-text);
+	box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.zone:hover {
+	border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+	color: var(--color-text-soft);
 }
 
 .zone:focus-visible,

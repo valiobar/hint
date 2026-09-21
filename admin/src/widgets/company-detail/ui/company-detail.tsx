@@ -6,7 +6,7 @@ import { SuggestedQuestionsForm } from '@/features/edit-suggested-questions';
 import { FileDropzone } from '@/features/upload-documents';
 import { UrlSourceForm } from '@/features/add-url-source';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Spinner, StatusPill } from '@/shared/ui';
+import { EmptyState, Spinner, StatusPill } from '@/shared/ui';
 import { formatBytes } from '@/shared/lib/format-bytes';
 import styles from './company-detail.module.css';
 
@@ -33,51 +33,62 @@ export const CompanyDetail = () => {
 		return null;
 	}
 
+	const hasDocuments = documents.length > 0 || uploadingFiles.length > 0;
+
 	return (
 		<section className={styles.detail} data-testid="company-detail">
 			<header className={styles.header}>
+				<p className={styles.kicker}>Knowledge base</p>
 				<h2>{company.name}</h2>
 				<code>{company.company_id}</code>
 			</header>
-			<EmbedSnippet companyId={company.company_id} />
-			<SuggestedQuestionsForm />
-			<h3>Documents</h3>
-			<FileDropzone />
-			<UrlSourceForm />
-			{isLoadingDocuments && <Spinner />}
-			{documentsError && (
-				<p className={styles.error} role="alert">
-					{documentsError}
+			<div className={styles.card}>
+				<EmbedSnippet companyId={company.company_id} />
+			</div>
+			<div className={styles.card}>
+				<SuggestedQuestionsForm />
+			</div>
+			<div className={styles.card}>
+				<h3>Documents</h3>
+				<p className={styles.hint}>
+					Upload product docs or paste support-page URLs. Ready rows
+					ground chat, hover hints, and walkthroughs for this company.
 				</p>
-			)}
-			<ul className={styles.documents}>
-				{uploadingFiles.map((file) => (
-					<li key={file.name} className={styles.uploadingRow}>
-						<span>{file.name}</span>
-						<span>{formatBytes(file.sizeBytes)}</span>
-						<StatusPill status="uploading" />
-					</li>
-				))}
-				{documents.map((doc) => (
-					<DocumentRow
-						key={doc.document_id}
-						document={doc}
-						actions={
-							<DeleteDocumentButton
-								documentId={doc.document_id}
-								filename={doc.filename}
-							/>
-						}
-					/>
-				))}
-			</ul>
-			{!isLoadingDocuments &&
-				documents.length === 0 &&
-				uploadingFiles.length === 0 && (
-					<p className={styles.empty}>
-						No documents yet — drop the product docs above.
+				<FileDropzone />
+				<UrlSourceForm />
+				{isLoadingDocuments && <Spinner />}
+				{documentsError && (
+					<p className={styles.error} role="alert">
+						{documentsError}
 					</p>
 				)}
+				<ul className={styles.documents}>
+					{uploadingFiles.map((file) => (
+						<li key={file.name} className={styles.uploadingRow}>
+							<span>{file.name}</span>
+							<span>{formatBytes(file.sizeBytes)}</span>
+							<StatusPill status="uploading" />
+						</li>
+					))}
+					{documents.map((doc) => (
+						<DocumentRow
+							key={doc.document_id}
+							document={doc}
+							actions={
+								<DeleteDocumentButton
+									documentId={doc.document_id}
+									filename={doc.filename}
+								/>
+							}
+						/>
+					))}
+				</ul>
+				{!isLoadingDocuments && !hasDocuments && (
+					<EmptyState title="No documents yet">
+						Drop the product docs above.
+					</EmptyState>
+				)}
+			</div>
 		</section>
 	);
 };

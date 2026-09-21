@@ -38,12 +38,13 @@ export const CreateCompanyForm = () => {
 			data-testid="create-company-form"
 		>
 			<TextInput
+				id="create-company-name"
 				value={name}
 				onChange={setName}
 				placeholder="Company name"
 				aria-label="Company name"
 			/>
-			<Button type="submit" disabled={isSubmitting}>
+			<Button type="submit" disabled={isSubmitting} className={styles.submit}>
 				{isSubmitting ? 'Creating…' : 'Create company'}
 			</Button>
 			{error && (

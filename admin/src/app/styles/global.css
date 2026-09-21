@@ -13,14 +13,41 @@ body,
 	min-height: 100%;
 }
 
+html {
+	background: var(--color-bg);
+}
+
 body {
 	font-family: var(--font-sans);
-	background: var(--color-bg);
+	background:
+		radial-gradient(
+			70% 50% at 50% -10%,
+			rgb(124 92 255 / 0.18),
+			transparent 55%
+		),
+		radial-gradient(
+			40% 30% at 100% 0%,
+			rgb(84 40 157 / 0.16),
+			transparent 45%
+		),
+		var(--color-bg);
 	color: var(--color-text);
 	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
 }
 
 button,
-input {
+input,
+textarea {
 	font: inherit;
+}
+
+a {
+	color: var(--color-accent);
+}
+
+::selection {
+	background: var(--color-accent-soft);
+	color: var(--color-text);
 }

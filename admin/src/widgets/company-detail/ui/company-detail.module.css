@@ -1,28 +1,67 @@
 .detail {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
-	padding: var(--space-3);
+	gap: var(--space-4);
+}
+
+.header,
+.card {
+	padding: var(--space-5);
 	background: var(--color-surface);
 	border: 1px solid var(--color-border);
-	border-radius: var(--radius);
+	border-radius: var(--radius-xl);
+	box-shadow: var(--shadow);
 }
 
 .header {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-1);
+	background:
+		radial-gradient(
+			90% 140% at 0% 0%,
+			var(--color-accent-soft),
+			transparent 55%
+		),
+		var(--color-surface);
+}
+
+.kicker {
+	margin: 0;
+	color: var(--color-accent);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
 }
 
 .header h2,
-.detail h3 {
+.card h3 {
 	margin: 0;
+	letter-spacing: -0.03em;
+}
+
+.header h2 {
+	font-size: 1.6rem;
+	font-weight: 800;
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
 }
 
 .header code {
 	color: var(--color-text-muted);
 	font-family: var(--font-mono);
-	font-size: 0.85rem;
+	font-size: 0.8rem;
+}
+
+.hint {
+	margin: 0;
+	color: var(--color-text-muted);
+	font-size: 0.9rem;
 }
 
 .documents {
@@ -35,7 +74,7 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-3);
-	padding: var(--space-2) 0;
+	padding: 0.85rem 0;
 	border-bottom: 1px solid var(--color-border);
 	color: var(--color-text-muted);
 }
@@ -43,11 +82,5 @@
 .error {
 	margin: 0;
 	color: var(--color-error);
-	font-size: 0.85rem;
-}
-
-.empty {
-	margin: 0;
-	color: var(--color-text-muted);
 	font-size: 0.85rem;
 }
