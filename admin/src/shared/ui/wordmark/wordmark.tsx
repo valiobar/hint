@@ -7,7 +7,9 @@ interface WordmarkProps {
 
 export const Wordmark = ({ size = 'md', label = 'Hint Admin' }: WordmarkProps) => (
 	<span className={`${styles.wordmark} ${styles[size]}`}>
-		<span className={styles.mark} aria-hidden="true" />
+		<span className={styles.mark} aria-hidden="true">
+			H
+		</span>
 		{label}
 	</span>
 );

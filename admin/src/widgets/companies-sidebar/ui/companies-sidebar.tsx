@@ -50,14 +50,9 @@ export const CompaniesSidebar = () => {
 					))}
 				</ul>
 			</section>
-			<section className={styles.section} aria-labelledby="content-docs-heading">
-				<h2 id="content-docs-heading" className={styles.heading}>
-					Content Docs
-				</h2>
-				<p className={styles.docsHint}>
-					Nothing selected — overview on the right.
-				</p>
-			</section>
+			<p className={styles.footer}>
+				Nothing selected — overview on the right.
+			</p>
 		</aside>
 	);
 };

@@ -57,6 +57,17 @@
 	filter: brightness(0.97);
 }
 
+.neutral {
+	background: var(--color-neutral);
+	border-color: var(--color-neutral);
+	color: var(--color-on-neutral);
+	box-shadow: none;
+}
+
+.neutral:hover:not(:disabled) {
+	filter: brightness(1.12);
+}
+
 .button:focus-visible {
 	outline: 2px solid var(--color-accent);
 	outline-offset: 3px;

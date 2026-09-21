@@ -6,8 +6,6 @@ type HealthStatus = 'loading' | 'ok' | 'degraded' | 'error';
 
 export const ApiStatusBadge = () => {
 	const [status, setStatus] = useState<HealthStatus>('loading');
-	const [mongo, setMongo] = useState('…');
-	const [chroma, setChroma] = useState('…');
 	const [detail, setDetail] = useState('checking…');
 
 	const loadHealth = useCallback(async () => {
@@ -21,16 +19,11 @@ export const ApiStatusBadge = () => {
 			const next = data.status === 'ok' ? 'ok' : 'degraded';
 			const mongoValue = data.mongo ?? '?';
 			const chromaValue = data.chroma ?? '?';
+			const label = `API ${next} · mongo=${mongoValue} · chroma=${chromaValue}`;
 			setStatus(next);
-			setMongo(mongoValue);
-			setChroma(chromaValue);
-			setDetail(
-				`API ${next} · mongo=${mongoValue} · chroma=${chromaValue}`,
-			);
+			setDetail(label);
 		} catch {
 			setStatus('error');
-			setMongo('down');
-			setChroma('down');
 			setDetail('API unreachable');
 		}
 	}, []);
@@ -41,16 +34,11 @@ export const ApiStatusBadge = () => {
 
 	return (
 		<div
-			className={styles.row}
+			className={`${styles.pill} ${styles[status]}`}
 			data-testid="api-status-badge"
-			title={detail}
 		>
-			<span className={`${styles.chip} ${styles[status]}`}>
-				<span className={`${styles.dot} ${styles[status]}`} aria-hidden="true" />
-				API {status === 'loading' ? '…' : status}
-			</span>
-			<span className={styles.chip}>mongo={mongo}</span>
-			<span className={styles.chip}>chroma={chroma}</span>
+			<span className={`${styles.dot} ${styles[status]}`} aria-hidden="true" />
+			<span>{detail}</span>
 		</div>
 	);
 };

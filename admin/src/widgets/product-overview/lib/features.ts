@@ -18,15 +18,15 @@ export const PRODUCT_FEATURES: ProductFeature[] = [
 		id: 'embed',
 		title: 'Embed snippet',
 		howItWorks:
-			'One script tag loads the Hint widget (open Shadow DOM) on any host page. It talks to public chat and hint APIs with that company id.',
+			'One script tag loads the Shadow DOM widget. It calls public /chat and /hint with that company id.',
 		howToAccess:
-			'Copy the snippet from the company pane. Demo already has one — override with ?company_id=',
+			'Copy the snippet from the company pane. Demo already has one — override with ?company_id=.',
 	},
 	{
 		id: 'guide-bar',
 		title: 'Guide bar',
 		howItWorks:
-			'A floating pill on the host page. Drag the grip to dock left or right; the tab remembers the position.',
+			'Floating pill on the host. Drag the grip to dock left or right; the tab remembers the position.',
 		howToAccess:
 			'Sparkle opens chat. Lightbulb toggles hover hints. Keyboard: Ctrl/Cmd + /.',
 	},
@@ -58,7 +58,7 @@ export const PRODUCT_FEATURES: ProductFeature[] = [
 		id: 'walkthroughs',
 		title: 'Guided walkthroughs',
 		howItWorks:
-			'Numbered how-tos start a walkthrough that highlights one control at a time.',
+			'Numbered how-tos can start a walkthrough that highlights one control at a time.',
 		howToAccess:
 			'Ask a how-to, then Walk me through it. Back / Next / Stop; Escape to exit.',
 	},

@@ -6,7 +6,7 @@ interface ButtonProps {
 	disabled?: boolean;
 	children: ReactNode;
 	onClick?: () => void;
-	variant?: 'primary' | 'ghost' | 'chip';
+	variant?: 'primary' | 'ghost' | 'chip' | 'neutral';
 	className?: string;
 	'aria-label'?: string;
 }

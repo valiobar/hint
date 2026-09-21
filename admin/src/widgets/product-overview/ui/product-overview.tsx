@@ -9,14 +9,14 @@ export const ProductOverview = () => {
 			aria-labelledby="product-overview-title"
 		>
 			<header className={styles.hero}>
-				<p className={styles.kicker}>HOST</p>
+				<p className={styles.kicker}>HINT</p>
 				<h2 id="product-overview-title">
 					In-app guidance from your product docs
 				</h2>
 				<p className={styles.lead}>
-					You upload the product manual here. Customers get a
-					floating guide bar in your app that answers from those
-					docs and the page they are on.
+					Upload the product manual here. Customers get a floating
+					guide bar in your app that answers from those docs and the
+					page they are on.
 				</p>
 				<p className={styles.cta}>
 					Select a company on the left — or create one — to manage

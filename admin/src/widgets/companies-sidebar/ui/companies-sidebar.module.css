@@ -1,8 +1,8 @@
 .sidebar {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-6);
-	padding: 1.35rem 1.25rem;
+	gap: 1.75rem;
+	padding: 1.5rem 1.35rem;
 	background: var(--color-surface);
 	border-right: 1px solid var(--color-border);
 }
@@ -15,21 +15,21 @@
 .section {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
+	gap: 0.75rem;
+	flex: 1;
 }
 
 .heading {
 	margin: 0;
 	color: var(--color-text);
-	font-size: 0.95rem;
-	font-weight: 700;
-	letter-spacing: -0.02em;
+	font-size: 0.92rem;
+	font-weight: 650;
 }
 
 .list {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2);
+	gap: 0.15rem;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -41,15 +41,16 @@
 	font-size: 0.85rem;
 }
 
-.docsHint {
+.footer {
 	margin: 0;
 	color: var(--color-text-muted);
-	font-size: 0.82rem;
+	font-size: 0.75rem;
 	line-height: 1.45;
 }
 
 @media (max-width: 48rem) {
 	.sidebar {
+		width: auto;
 		border-right: 0;
 		border-bottom: 1px solid var(--color-border);
 	}
