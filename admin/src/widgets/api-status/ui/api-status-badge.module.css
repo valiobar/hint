@@ -1,36 +1,50 @@
-.badge {
+.pill {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-2);
-	padding: 0.3rem 0.65rem;
-	background: rgb(255 255 255 / 0.04);
-	border: 1px solid var(--color-border);
+	gap: 0.45rem;
+	padding: 0.35rem 0.75rem;
 	border-radius: var(--radius-pill);
-	color: var(--color-text-soft);
+	background: var(--color-ok-soft);
+	color: #067647;
 	font-family: var(--font-mono);
 	font-size: 0.75rem;
 }
 
 .dot {
-	width: 0.5rem;
-	height: 0.5rem;
+	width: 0.45rem;
+	height: 0.45rem;
 	border-radius: 50%;
-	background: #6b7280;
-}
-
-.loading {
-	background: #6b7280;
-}
-
-.ok {
+	flex-shrink: 0;
 	background: var(--color-ok);
-	box-shadow: 0 0 0 3px var(--color-ok-soft);
 }
 
-.degraded {
+.pill.loading {
+	background: var(--color-bg-elevated);
+	color: var(--color-text-muted);
+}
+
+.pill.loading .dot {
+	background: #98a2b3;
+}
+
+.pill.degraded {
+	background: var(--color-warn-soft);
+	color: var(--color-warn);
+}
+
+.pill.degraded .dot {
 	background: var(--color-warn);
 }
 
-.error {
+.pill.error {
+	background: var(--color-error-soft);
+	color: var(--color-error);
+}
+
+.pill.error .dot {
 	background: var(--color-error);
+}
+
+[data-theme='dark'] .pill.ok {
+	color: #75e0a7;
 }

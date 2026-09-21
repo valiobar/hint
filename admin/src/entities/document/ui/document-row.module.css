@@ -24,7 +24,7 @@
 
 .sourceUrl {
 	overflow: hidden;
-	color: #cbbdff;
+	color: var(--color-code-text);
 	font-size: 0.8rem;
 	text-overflow: ellipsis;
 	white-space: nowrap;

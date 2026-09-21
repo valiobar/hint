@@ -1,12 +1,11 @@
 .wordmark {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.55rem;
+	gap: 0.6rem;
 	color: var(--color-text);
-	font-weight: 800;
-	letter-spacing: -0.04em;
+	font-weight: 700;
+	letter-spacing: -0.03em;
 	line-height: 1;
-	text-transform: lowercase;
 }
 
 .sm {
@@ -18,9 +17,20 @@
 }
 
 .mark {
-	width: 0.7em;
-	height: 0.7em;
-	border-radius: 0.22em;
-	background: linear-gradient(160deg, #b49cff 0%, var(--color-accent) 70%);
-	box-shadow: 0 0 0 3px var(--color-accent-soft);
+	display: grid;
+	place-items: center;
+	width: 1.55rem;
+	height: 1.55rem;
+	border-radius: 0.45rem;
+	background: var(--color-accent);
+	color: #ffffff;
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0;
+}
+
+.sm .mark {
+	width: 1.7rem;
+	height: 1.7rem;
+	font-size: 0.85rem;
 }

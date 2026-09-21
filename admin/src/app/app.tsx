@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { LoginForm } from '@/features/login';
 import { setUnauthorizedHandler } from '@/shared/api';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Button, Wordmark } from '@/shared/ui';
+import { Button, ThemeToggle } from '@/shared/ui';
 import { ApiStatusBadge } from '@/widgets/api-status';
 import { CompaniesSidebar } from '@/widgets/companies-sidebar';
 import { CompanyDetail } from '@/widgets/company-detail';
@@ -32,6 +32,9 @@ export const App = () => {
 	if (!isAuthenticated) {
 		return (
 			<main className={styles.loginScreen} data-testid="login-screen">
+				<div className={styles.loginTheme}>
+					<ThemeToggle />
+				</div>
 				<LoginForm />
 			</main>
 		);
@@ -39,21 +42,19 @@ export const App = () => {
 
 	return (
 		<div className={styles.layout}>
-			<header className={styles.header}>
-				<div className={styles.brand}>
-					<Wordmark size="sm" />
-					<h1 className={styles.title}>Hint Admin</h1>
-				</div>
-				<div className={styles.headerActions}>
-					<ApiStatusBadge />
-					<span className={styles.adminEmail}>{adminEmail}</span>
-					<Button variant="ghost" onClick={logout}>
-						Sign out
-					</Button>
-				</div>
-			</header>
-			<div className={styles.panes}>
-				<CompaniesSidebar />
+			<CompaniesSidebar />
+			<div className={styles.workspace}>
+				<header className={styles.header}>
+					<h1 className={styles.visuallyHidden}>Hint Admin</h1>
+					<div className={styles.headerActions}>
+						<ApiStatusBadge />
+						<span className={styles.adminEmail}>{adminEmail}</span>
+						<ThemeToggle />
+						<Button variant="neutral" onClick={logout}>
+							Sign out
+						</Button>
+					</div>
+				</header>
 				<main className={styles.main}>
 					{selectedCompanyId ? <CompanyDetail /> : <ProductOverview />}
 				</main>

@@ -6,8 +6,9 @@ interface ButtonProps {
 	disabled?: boolean;
 	children: ReactNode;
 	onClick?: () => void;
-	variant?: 'primary' | 'ghost';
+	variant?: 'primary' | 'ghost' | 'chip' | 'neutral';
 	className?: string;
+	'aria-label'?: string;
 }
 
 export const Button = ({
@@ -17,6 +18,7 @@ export const Button = ({
 	onClick,
 	variant = 'primary',
 	className,
+	'aria-label': ariaLabel,
 }: ButtonProps) => (
 	<button
 		type={type}
@@ -25,6 +27,7 @@ export const Button = ({
 			.filter(Boolean)
 			.join(' ')}
 		onClick={onClick}
+		aria-label={ariaLabel}
 		data-testid="button"
 	>
 		{children}

@@ -17,10 +17,11 @@ export const ApiStatusBadge = () => {
 				chroma?: string;
 			};
 			const next = data.status === 'ok' ? 'ok' : 'degraded';
+			const mongoValue = data.mongo ?? '?';
+			const chromaValue = data.chroma ?? '?';
+			const label = `API ${next} · mongo=${mongoValue} · chroma=${chromaValue}`;
 			setStatus(next);
-			setDetail(
-				`API ${next} · mongo=${data.mongo ?? '?'} · chroma=${data.chroma ?? '?'}`,
-			);
+			setDetail(label);
 		} catch {
 			setStatus('error');
 			setDetail('API unreachable');
@@ -32,11 +33,11 @@ export const ApiStatusBadge = () => {
 	}, [loadHealth]);
 
 	return (
-		<div className={styles.badge} data-testid="api-status-badge">
-			<span
-				className={`${styles.dot} ${styles[status]}`}
-				aria-hidden="true"
-			/>
+		<div
+			className={`${styles.pill} ${styles[status]}`}
+			data-testid="api-status-badge"
+		>
+			<span className={`${styles.dot} ${styles[status]}`} aria-hidden="true" />
 			<span>{detail}</span>
 		</div>
 	);
