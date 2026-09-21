@@ -298,7 +298,8 @@ Admin copies something like:
 
 On a deployed server, both URLs must be **that server’s IP or host**,
 not `localhost`. `localhost` in a visitor’s browser means *their*
-machine.
+machine. Production images bake those URLs at CI build time — see
+[`deployment.md`](deployment.md).
 
 - `data-hint-company-id` — required
 - `data-hint-api-url` — required in production; if omitted, the loader

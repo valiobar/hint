@@ -1,29 +1,114 @@
-name: Deploy to Hetzner
+name: Deploy
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            dockerfile: backend/Dockerfile
+            context: backend
+          - service: admin
+            dockerfile: admin/Dockerfile
+            context: admin
+          - service: widget
+            dockerfile: widget/Dockerfile
+            context: widget
+          - service: demo
+            dockerfile: demo/Dockerfile
+            context: demo
     steps:
-      - name: SSH deploy
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require public URLs for frontend builds
+        if: matrix.service == 'admin' || matrix.service == 'demo'
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_WIDGET_CDN_URL: ${{ secrets.VITE_WIDGET_CDN_URL }}
+        run: |
+          if [ -z "$VITE_API_URL" ] || [ -z "$VITE_WIDGET_CDN_URL" ]; then
+            echo "Add repo secrets VITE_API_URL and VITE_WIDGET_CDN_URL (inlined at image build)."
+            echo "Example for droplet 159.89.26.67:"
+            echo "  VITE_API_URL=http://159.89.26.67:8000"
+            echo "  VITE_WIDGET_CDN_URL=http://159.89.26.67:1337"
+            exit 1
+          fi
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: |
+            VITE_API_URL=${{ (matrix.service == 'admin' || matrix.service == 'demo') && secrets.VITE_API_URL || '' }}
+            VITE_WIDGET_CDN_URL=${{ (matrix.service == 'admin' || matrix.service == 'demo') && secrets.VITE_WIDGET_CDN_URL || '' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/hint-${{ matrix.service }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/hint-${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: ${{ secrets.HETZNER_USER }}
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
-          script_stop: true
-          # Compose --build can exceed the action default (10m); keep under job timeout.
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Optional: set DEPLOY_PATH secret to the repo checkout on the VPS
+          # (defaults to ~/hint if unset / empty)
           command_timeout: 25m
+          envs: IMAGE_TAG
           script: |
-            set -euo pipefail
-            cd "${{ secrets.HETZNER_APP_DIR }}"
-            bash scripts/deploy.sh
+            set -e
+            REPO_DIR="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "$REPO_DIR" ]; then
+              REPO_DIR="$HOME/hint"
+            fi
+            cd "$REPO_DIR"
+            if [ ! -f .env ]; then
+              echo "ERROR: .env missing on server. Create it once from .env.example."
+              exit 1
+            fi
+            if grep -q '^IMAGE_TAG=' .env; then
+              sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
+            else
+              echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
+            fi
+            export IMAGE_TAG
+            bash deploy.sh
+        env:
+          IMAGE_TAG: ${{ github.sha }}

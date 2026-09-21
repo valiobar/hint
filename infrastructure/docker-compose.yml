@@ -1,14 +1,16 @@
 name: hint
 
-# Local / POC compose: builds from source (`docker compose up --build`).
-# Production pulls GHCR images via infrastructure/docker-compose.yml + deploy.sh.
-# See docs/deployment.md.
+# Production Compose stack. App services pull prebuilt GHCR images
+# (IMAGE_TAG). Local `up --build` can still use the build: sections.
+# Deploy path: IMAGE_TAG=<sha> bash deploy.sh  (never --build on the VPS)
 
 services:
   mongo:
     image: mongo:7
+    container_name: hint-mongo
     volumes:
       - mongo-data:/data/db
+    restart: unless-stopped
     networks: [hint-network]
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
@@ -18,12 +20,20 @@ services:
 
   chromadb:
     image: chromadb/chroma:0.5.23
+    container_name: hint-chromadb
     volumes:
       - chroma-data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
     networks: [hint-network]
 
   backend:
-    build: ./backend
+    image: ghcr.io/valiobar/hint-backend:${IMAGE_TAG:-latest}
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: hint-backend
     ports: ["8000:8000"]
     environment:
       - MONGODB_URL=mongodb://mongo:27017/hint
@@ -34,38 +44,56 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
-      - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-me}
+      - JWT_SECRET=${JWT_SECRET}
       - ACCESS_TOKEN_TTL_MINUTES=${ACCESS_TOKEN_TTL_MINUTES:-720}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@hint.local}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - HINT_CACHE_TTL_SECONDS=${HINT_CACHE_TTL_SECONDS:-3600}
+      - HINT_CACHE_MAX_ENTRIES=${HINT_CACHE_MAX_ENTRIES:-1024}
     depends_on:
       mongo:
         condition: service_healthy
       chromadb:
         condition: service_started
+    restart: unless-stopped
     networks: [hint-network]
 
   admin:
+    image: ghcr.io/valiobar/hint-admin:${IMAGE_TAG:-latest}
     build:
-      context: ./admin
+      context: ../admin
+      dockerfile: Dockerfile
       args:
         VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}"
         VITE_WIDGET_CDN_URL: "${VITE_WIDGET_CDN_URL:-http://localhost:1337}"
+    container_name: hint-admin
     ports: ["3001:80"]
     depends_on: [backend]
+    restart: unless-stopped
     networks: [hint-network]
 
   widget-cdn:
-    build: ./widget
+    image: ghcr.io/valiobar/hint-widget:${IMAGE_TAG:-latest}
+    build:
+      context: ../widget
+      dockerfile: Dockerfile
+    container_name: hint-widget
     ports: ["1337:80"]
+    restart: unless-stopped
     networks: [hint-network]
 
   demo:
-    image: nginx:alpine
-    volumes:
-      - ./demo:/usr/share/nginx/html:ro
+    image: ghcr.io/valiobar/hint-demo:${IMAGE_TAG:-latest}
+    build:
+      context: ../demo
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}"
+        VITE_WIDGET_CDN_URL: "${VITE_WIDGET_CDN_URL:-http://localhost:1337}"
+    container_name: hint-demo
     ports: ["3002:80"]
     depends_on: [widget-cdn]
+    restart: unless-stopped
     networks: [hint-network]
 
 networks:
