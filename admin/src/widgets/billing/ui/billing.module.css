@@ -1,0 +1,232 @@
+.screen {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+	padding: var(--space-5);
+	position: relative;
+}
+
+.theme {
+	position: absolute;
+	top: var(--space-4);
+	right: var(--space-4);
+}
+
+.panel {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	width: min(46rem, 100%);
+	padding: var(--space-6);
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-xl);
+	box-shadow: var(--shadow), var(--shadow-glow);
+}
+
+.kicker {
+	margin: var(--space-2) 0 0;
+	color: var(--color-accent);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.panel h1 {
+	margin: 0;
+	font-size: 1.75rem;
+	font-weight: 800;
+	letter-spacing: -0.04em;
+	line-height: 1.15;
+}
+
+.lead,
+.currentPlan,
+.error,
+.footer {
+	margin: 0;
+}
+
+.lead,
+.footer {
+	color: var(--color-text-muted);
+	font-size: 0.95rem;
+	line-height: 1.55;
+}
+
+.currentPlan {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	color: var(--color-text);
+	font-size: 0.95rem;
+}
+
+.currentPlan strong {
+	font-weight: 750;
+	text-transform: capitalize;
+}
+
+.pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.2rem 0.55rem;
+	border: 1px solid transparent;
+	border-radius: var(--radius-pill);
+	background: var(--color-accent-soft);
+	color: var(--color-code-text);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	line-height: 1.2;
+	text-transform: lowercase;
+}
+
+.pill[data-status='active'],
+.pill[data-status='trialing'] {
+	background: var(--color-ok-soft);
+	color: var(--color-ok);
+	border-color: rgb(23 178 106 / 0.28);
+}
+
+.pill[data-status='past_due'],
+.pill[data-status='canceled'] {
+	background: var(--color-warn-soft);
+	color: var(--color-warn);
+	border-color: rgb(245 165 36 / 0.28);
+}
+
+.pill[data-status='revoked'] {
+	background: var(--color-error-soft);
+	color: var(--color-error);
+	border-color: rgb(248 113 113 / 0.28);
+}
+
+.cards {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-4);
+	margin: var(--space-2) 0;
+}
+
+.card,
+.cardCurrent {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-4);
+	background: var(--color-bg);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+}
+
+.cardCurrent {
+	border-color: var(--color-accent);
+	box-shadow: var(--shadow-glow);
+}
+
+.cardHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
+
+.card h2,
+.cardCurrent h2 {
+	margin: 0;
+	font-size: 1.2rem;
+	font-weight: 750;
+	letter-spacing: -0.03em;
+}
+
+.badge {
+	padding: 0.15rem 0.5rem;
+	border-radius: var(--radius-pill);
+	background: var(--color-accent-soft);
+	color: var(--color-code-text);
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.features {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0 0 0 1.1rem;
+	color: var(--color-text-soft);
+	font-size: 0.9rem;
+	line-height: 1.45;
+	flex: 1;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.pending {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-3);
+	color: var(--color-text-muted);
+	text-align: center;
+}
+
+.pending p,
+.timeout {
+	margin: 0;
+}
+
+.timeout {
+	max-width: 28rem;
+	color: var(--color-text);
+	font-size: 1rem;
+	line-height: 1.5;
+	text-align: center;
+}
+
+.error {
+	color: var(--color-error);
+	font-size: 0.85rem;
+}
+
+.signOut {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-accent);
+	font-size: inherit;
+	font-weight: 650;
+	cursor: pointer;
+}
+
+.signOut:hover {
+	text-decoration: underline;
+}
+
+.signOut:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 3px;
+	border-radius: var(--radius-sm);
+}
+
+@media (max-width: 40rem) {
+	.screen {
+		align-items: flex-start;
+		padding-top: 4.5rem;
+	}
+
+	.cards {
+		grid-template-columns: 1fr;
+	}
+}

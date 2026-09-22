@@ -6,8 +6,9 @@ from app.repositories.document_repo import DocumentRepository
 from app.routes.deps import (
     get_document_repo,
     get_ingestion_service,
-    require_company,
     require_openai_key,
+    require_owned_company,
+    require_url_ingestion,
 )
 from app.services.ingestion_service import MAX_FILE_SIZE_BYTES, IngestionService
 
@@ -24,7 +25,7 @@ router = APIRouter(
     dependencies=[Depends(require_openai_key)],
 )
 async def upload_documents(
-    company: Company = Depends(require_company),
+    company: Company = Depends(require_owned_company),
     svc: IngestionService = Depends(get_ingestion_service),
     files: list[UploadFile] = File(...),
 ) -> list[DocumentMeta]:
@@ -52,11 +53,11 @@ async def upload_documents(
     "/from-url",
     response_model=list[DocumentMeta],
     status_code=201,
-    dependencies=[Depends(require_openai_key)],
+    dependencies=[Depends(require_openai_key), Depends(require_url_ingestion)],
 )
 async def ingest_urls(
     body: IngestUrlsRequest,
-    company: Company = Depends(require_company),
+    company: Company = Depends(require_owned_company),
     svc: IngestionService = Depends(get_ingestion_service),
 ) -> list[DocumentMeta]:
     return [
@@ -67,7 +68,7 @@ async def ingest_urls(
 
 @router.get("", response_model=list[DocumentMeta])
 async def list_documents(
-    company: Company = Depends(require_company),
+    company: Company = Depends(require_owned_company),
     repo: DocumentRepository = Depends(get_document_repo),
 ) -> list[DocumentMeta]:
     return await repo.list_by_company(company.company_id)
@@ -76,7 +77,7 @@ async def list_documents(
 @router.delete("/{document_id}", status_code=204)
 async def delete_document(
     document_id: str,
-    company: Company = Depends(require_company),
+    company: Company = Depends(require_owned_company),
     svc: IngestionService = Depends(get_ingestion_service),
 ) -> None:
     deleted = await svc.delete_document(company.company_id, document_id)

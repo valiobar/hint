@@ -1,12 +1,14 @@
 # Hint — Backend (Knowledge Base API)
 
-> **Status: Phase 3 (AI layer) complete.**
-> Covers JWT auth, companies CRUD, document ingestion (files and support-page
-> URLs → parse → chunk → embed → Chroma), retrieval, and the widget-facing
-> chat (SSE) + hint endpoints. AI runtime:
+> **Status: Phase 3 (AI layer) complete, plus multi-user billing.**
+> Covers JWT auth (register, login, Google), Polar checkout / portal /
+> webhooks, companies CRUD with ownership and plan limits, document
+> ingestion (files and support-page URLs → parse → chunk → embed → Chroma),
+> retrieval, and the widget-facing chat (SSE) + hint endpoints. AI runtime:
 > [`06-ai-layer.md`](06-ai-layer.md). Auth contract (seeding, token TTL,
 > protected vs public): [`05-auth.md`](05-auth.md). Admin SPA:
-> [`04-admin.md`](04-admin.md). Stack/env:
+> [`04-admin.md`](04-admin.md). Widget:
+> [`03-widget.md`](03-widget.md). Stack/env:
 > [`01-architecture-overview.md`](01-architecture-overview.md).
 
 ## Layering
@@ -15,19 +17,21 @@
 repositories never contain business rules:
 
 ```
-routes/        auth.py · companies.py · widget_config.py · documents.py
-               · retrieve.py · assist.py · deps.py
+routes/        auth.py · billing.py · webhooks.py · companies.py
+               · widget_config.py · documents.py · retrieve.py · assist.py · deps.py
   └─▶ ai/              llm_factory.py · prompts.py · chat_graph.py · hint_chain.py
-  └─▶ services/        auth_service.py · company_service.py · ingestion_service.py
-                       · retrieval_service.py · text_extraction.py
-                       · url_fetcher.py · page_extraction.py · hint_cache.py
+  └─▶ services/        auth_service.py · billing_service.py · company_service.py
+                       · ingestion_service.py · retrieval_service.py
+                       · text_extraction.py · url_fetcher.py · page_extraction.py
+                       · hint_cache.py
         └─▶ repositories/  user_repo.py · company_repo.py · document_repo.py
                            · vector_repo.py (Chroma adapter)
-              └─▶ models/     user.py · company.py · document.py · retrieval.py
-                              · assist.py
+              └─▶ models/     user.py · billing.py · company.py · document.py
+                              · retrieval.py · assist.py
 db/            mongo.py (Motor client, ensure_indexes) · chroma.py (HttpClient)
 config.py      Settings (BaseSettings) · get_settings() cached accessor
-main.py        lifespan (connect + indexes + seed admin) · CORS · /health · routers
+main.py        lifespan (connect + indexes + seed superadmin + owner backfill)
+               · CORS · /health · routers
 ```
 
 `ai/` is the only layer that constructs LLM clients. Routes call `ai/` entry
@@ -39,24 +43,44 @@ Cross-cutting rules:
 - Every endpoint declares a `response_model`; all I/O is `async`.
 - Chroma's Python client is synchronous — **every** Chroma call goes through
   `run_in_threadpool` inside `VectorRepository`; no other layer touches the Chroma client.
-- `routes/deps.py` centralizes dependency wiring plus three guards:
-  - `require_admin` — 401 unless `Authorization: Bearer` decodes to a `users` row.
-    Applied at router level on companies + documents. `GET …/widget-config` lives
-    on a **separate** `widget_config` router (same `/companies` prefix, **no**
+- `routes/deps.py` centralizes dependency wiring plus the guards:
+  - `require_user` — 401 unless `Authorization: Bearer` decodes to a `users` row.
+    Applied at router level on companies, documents, and billing. Returns
+    `UserInDB` (role + subscription). `GET …/widget-config` lives on a
+    **separate** `widget_config` router (same `/companies` prefix, **no**
     JWT) so the embed can read starter questions. Full contract: [`05-auth.md`](05-auth.md).
-  - `require_company` — 404 `"Unknown company_id"` before any company-scoped work.
+  - `require_owned_company` — 404 `"Unknown company_id"` when the company is
+    missing **or** `owner_id` is not the caller. Superadmin skips the owner check.
+  - `require_company` — 404 `"Unknown company_id"` with no owner check (public
+    widget path).
+  - `require_url_ingestion` — 403 when the caller's plan does not include URL ingest.
   - `require_openai_key` — 503 with an actionable message when `OPENAI_API_KEY` is empty
     (the stack boots without it; ingestion, `/retrieve`, `/chat`, and `/hint` need it).
+  - `get_billing_service` — 503 when `POLAR_ACCESS_TOKEN` is empty (checkout, portal,
+    and the webhook all go through it). The stack still boots.
 
 ## Authentication
 
-Preset admin user, seeded at startup from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (bcrypt,
-idempotent upsert). Login returns a JWT (HS256, default 12 h). Companies and
-documents routers require it; `POST /api/v1/retrieve`, `POST /api/v1/chat`,
+Seeded superadmin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`, bcrypt, `role: "superadmin"`)
+plus self-service users (`POST /auth/register`, Google OAuth). Login and
+register return a JWT (HS256, default 12 h, `sub` = email). Companies,
+documents, and billing require it. `POST /api/v1/retrieve`, `POST /api/v1/chat`,
 `POST /api/v1/hint`, `GET /api/v1/companies/{id}/widget-config`, and
-`GET /health` do not.
+`GET /health` do not. The Polar webhook is signature-checked, not JWT-checked.
 
-If `ADMIN_PASSWORD` is empty, seeding is skipped and every login is 401 (fail-closed).
+If `ADMIN_PASSWORD` is empty, superadmin seeding is skipped. Register and
+Google still work.
+
+### POST /api/v1/auth/register → 201 (public)
+
+```json
+{"email": "ada@example.com", "password": "long-enough"}
+// Response 201 — same shape as login
+{"access_token": "eyJ…", "token_type": "bearer", "expires_in": 43200, "email": "ada@example.com"}
+```
+
+Errors: `409` `{"detail": "Email is already registered"}` · `422` password
+shorter than 8 or invalid email.
 
 ### POST /api/v1/auth/login → 200 (public)
 
@@ -68,32 +92,41 @@ If `ADMIN_PASSWORD` is empty, seeding is skipped and every login is 401 (fail-cl
 {"access_token": "eyJ…", "token_type": "bearer", "expires_in": 43200, "email": "admin@hint.local"}
 ```
 
-Errors: `401` `{"detail": "Invalid email or password"}` (unknown email and wrong
-password share this body) · `422` invalid body.
+Errors: `401` `{"detail": "Invalid email or password"}` (unknown email, wrong
+password, and Google-only accounts share this body) · `422` invalid body.
 
 ### GET /api/v1/auth/me → 200 (bearer)
 
 ```json
-{"email": "admin@hint.local", "created_at": "2026-08-15T12:00:00Z"}
+{
+  "email": "ada@example.com",
+  "role": "user",
+  "created_at": "2026-09-21T12:00:00Z",
+  "plan": null,
+  "subscription_status": null,
+  "limits": {"max_companies": 0, "url_ingestion": false}
+}
 ```
 
 Errors: `401` `Missing bearer token` · `Invalid or expired token - sign in again` ·
-`Unknown user`. All 401s from `require_admin` include `WWW-Authenticate: Bearer`.
+`Unknown user`. All 401s from `require_user` include `WWW-Authenticate: Bearer`.
 
-Send the token on every admin call:
+Send the token on every operator call:
 
 ```
 Authorization: Bearer <access_token>
 ```
 
-Seeding, TTL, rotation, and the public-`/retrieve` trade-off:
+Google redirect, seeding, TTL, and rotation:
 [`05-auth.md`](05-auth.md).
 
 ## API contracts
 
-All routes are mounted under `/api/v1`. Companies and documents require a bearer
-token (Phase 2), including `PATCH …/widget-config`. `/auth/login`, `/retrieve`,
-`/chat`, `/hint`, `GET /companies/{id}/widget-config`, and `/health` are public.
+All routes are mounted under `/api/v1`. Companies, documents, and billing
+require a bearer token, including `PATCH …/widget-config`. `/auth/register`,
+`/auth/login`, `/auth/google/*`, `/retrieve`, `/chat`, `/hint`,
+`GET /companies/{id}/widget-config`, `/webhooks/polar` (signature, not JWT),
+and `/health` are public.
 
 ### POST /api/v1/companies → 201
 
@@ -104,20 +137,33 @@ Create a company. `company_id` is a generated slug (`cmp_` + 8 hex chars).
 {"name": "Acme Corp"}                  // 1–100 chars
 
 // Response 201
-{"company_id": "cmp_1a2b3c4d", "name": "Acme Corp", "created_at": "2026-08-08T12:00:00Z", "suggested_questions": []}
+{
+  "company_id": "cmp_1a2b3c4d",
+  "name": "Acme Corp",
+  "created_at": "2026-08-08T12:00:00Z",
+  "owner_id": "usr_a1b2c3d4",
+  "suggested_questions": []
+}
 ```
 
-Errors: `401` missing/invalid token · `422` invalid body (empty or >100-char name).
-New companies start with `suggested_questions: []` (no default prompts).
+`owner_id` is the caller's `user_id`. New companies start with
+`suggested_questions: []` (no default prompts).
+
+Errors: `401` missing/invalid token · `402` no active subscription ·
+`403` at the plan's company cap · `422` invalid body (empty or >100-char name).
+Superadmin skips 402 and 403. See [Plan limits and ownership](#plan-limits-and-ownership).
 
 ### GET /api/v1/companies → 200
 
-List all companies, newest first. Response: `[Company]` (same shape as above).
+List the caller's companies, newest first. Superadmin lists every company.
+Response: `[Company]` (same shape as above, including `owner_id`).
 Errors: `401` missing/invalid token.
 
 ### GET /api/v1/companies/{company_id} → 200
 
-Fetch one company. Errors: `401` missing/invalid token · `404` `{"detail": "Unknown company_id"}`.
+Fetch one company. A company owned by someone else returns the same 404 as
+a missing id (no existence leak). Superadmin can read any id.
+Errors: `401` missing/invalid token · `404` `{"detail": "Unknown company_id"}`.
 
 ### GET /api/v1/companies/{company_id}/widget-config → 200 (public)
 
@@ -145,16 +191,16 @@ Replace the company's starter questions. Admin editor calls this.
 // Request
 {"suggested_questions":["How do I create an invoice?","How do I export a report?"]}
 
-// Response 200 — full Company including suggested_questions
-{"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"2026-08-08T12:00:00Z","suggested_questions":["How do I create an invoice?","How do I export a report?"]}
+// Response 200 — full Company including owner_id and suggested_questions
+{"company_id":"cmp_1a2b3c4d","name":"Acme Corp","owner_id":"usr_a1b2c3d4","created_at":"2026-08-08T12:00:00Z","suggested_questions":["How do I create an invoice?","How do I export a report?"]}
 ```
 
 Caps (422 if violated): 0–4 items; each 1–120 characters after trim; blank
 entries rejected. `[]` clears chips (visible on the host after reload — the
 widget caches in memory for the page lifetime).
 
-Errors: `401` · `404` unknown id · `422` more than 4 items, blank
-entries, or an item longer than 120 characters.
+Errors: `401` · `404` unknown id **or** another user's company · `422` more
+than 4 items, blank entries, or an item longer than 120 characters.
 
 ### POST /api/v1/companies/{company_id}/documents → 201
 
@@ -193,8 +239,10 @@ bad file never fails the batch.
 ]
 ```
 
-Errors: `401` missing/invalid token · `404` unknown company · `413` file > 10 MB
-(checked before any processing) · `422` no files · `503` `OPENAI_API_KEY` not configured.
+Errors: `401` missing/invalid token · `404` unknown company or not the owner ·
+`413` file > 10 MB (checked before any processing) · `422` no files ·
+`503` `OPENAI_API_KEY` not configured. File upload is **not** plan-gated
+(Basic and a subscriber with no URL ingest can still upload).
 
 `DocumentMeta.source_type` defaults to `"file"` and `source_url` to `null` so
 existing Mongo rows stay valid without a migration.
@@ -260,20 +308,23 @@ JS-rendered pages and empty bodies become `failed` (`EmptyDocumentError`).
 Chunks store `source_url` in Chroma metadata; chat `done.sources` prefers
 it over `filename` ([`06-ai-layer.md`](06-ai-layer.md#sse-protocol--post-apiv1chat-public)).
 
-Errors: `401` missing/invalid token · `404` unknown company · `422` empty
+Errors: `401` missing/invalid token · `403` `URL ingestion is a Pro feature — upgrade your plan`
+(Basic, or any user whose `limits.url_ingestion` is false, including no
+subscription) · `404` unknown company or not the owner · `422` empty
 list, more than 20 URLs, or a non-URL string · `503` `OPENAI_API_KEY` not
-configured. There is no automatic re-fetch — delete and re-add the URL.
+configured. Superadmin is allowed. There is no automatic re-fetch — delete
+and re-add the URL.
 
 ### GET /api/v1/companies/{company_id}/documents → 200
 
 List a company's documents, newest first. Response: `[DocumentMeta]`.
-Errors: `401` missing/invalid token · `404` unknown company.
+Errors: `401` missing/invalid token · `404` unknown company or not the owner.
 
 ### DELETE /api/v1/companies/{company_id}/documents/{document_id} → 204
 
 Delete a document: Chroma chunks are removed first (metadata filter on `document_id`),
-then the Mongo record. Errors: `401` missing/invalid token · `404` unknown company
-or unknown/cross-company `document_id`.
+then the Mongo record. Errors: `401` missing/invalid token · `404` unknown
+company, another user's company, or unknown/cross-company `document_id`.
 
 ### POST /api/v1/retrieve → 200
 
@@ -304,8 +355,8 @@ Errors: `404` unknown `company_id` (validated in-handler since the ID is in the 
 
 ### POST /api/v1/chat → 200 SSE (public)
 
-LangGraph graph `condense_query → retrieve (k=5) → generate_answer`. Streams
-tokens over `text/event-stream`. The widget (Phase 4) and curl both use POST +
+LangGraph graph `condense_query → retrieve (k=5) → assess_page → generate_answer`.
+Streams tokens over `text/event-stream`. The widget and curl both use POST +
 a readable stream — browsers cannot use `EventSource` (no request body).
 Runtime details: [`06-ai-layer.md`](06-ai-layer.md).
 
@@ -420,6 +471,129 @@ backend empties the store (per-process).
 Pings Mongo and Chroma. `{"status":"ok","mongo":"ok","chroma":"ok"}`, or 503 with
 `"status":"degraded"` and per-store error names.
 
+## Billing
+
+Polar is the merchant of record. Hint stores subscription state on the
+`users` document and never talks to a card form. Trial length is configured
+on the Polar products, not in this repo.
+
+```
+Admin / curl  POST /billing/checkout {plan} ──▶ backend ──▶ Polar checkout URL
+User pays on Polar (trial starts there)
+Polar  POST /webhooks/polar (signed) ──▶ users.$set plan + subscription_status
+Client  GET /auth/me ──▶ plan + limits ──▶ POST /companies is allowed
+```
+
+Checkout does not unlock the product by itself. Poll `GET /auth/me` until
+`subscription_status` is `trialing` or `active`. Duplicate webhook deliveries
+are safe: `update_subscription` is an idempotent `$set`.
+
+### Plan limits and ownership
+
+`resolve_limits` (`backend/app/models/billing.py`):
+
+| Caller | `max_companies` | `url_ingestion` | Create company | `POST …/from-url` |
+|---|---|---|---|---|
+| No plan, or status not `active` / `trialing` (`canceled`, `revoked`, `past_due`, null) | 0 | false | **402** | **403** |
+| `basic` + `active` or `trialing` | 1 | false | 201, then **403** on the 2nd | **403** |
+| `pro` + `active` or `trialing` | 10 | true | 201 through the 10th; 11th is **403** | 201 |
+| `superadmin` | 10000 | true | 201 (no Polar required) | 201 |
+
+402 detail: `An active subscription is required to create companies`.
+403 at the cap: `Your plan allows up to {n} company(ies) — upgrade to Pro for more`.
+403 on URL ingest: `URL ingestion is a Pro feature — upgrade your plan`.
+
+Downgrade (Pro → Basic, or cancel) does **not** delete or hide companies
+already created. List, get, file upload, and widget-config keep working for
+the owner. Only **creation** above the new cap is blocked. A canceled or
+`past_due` user can still read existing companies; the next create is 402
+because `max_companies` drops to 0. Polar keeps `status=active` until the
+paid period ends, then sends `subscription.revoked`.
+
+Every new company is stored with `owner_id` = the caller's `user_id`.
+`GET /companies` is filtered by that id (superadmin sees all).
+`require_owned_company` returns 404 `Unknown company_id` for a foreign
+`owner_id`, including document routes. At boot, companies that have no
+`owner_id` field are assigned the seeded superadmin (once).
+
+### POST /api/v1/billing/checkout → 200 (bearer)
+
+```json
+// Request
+{"plan": "basic"}          // "basic" | "pro"
+
+// Response 200
+{"checkout_url": "https://sandbox.polar.sh/checkout/…"}
+```
+
+Polar checkout is created with `external_customer_id` = the user's
+`user_id`, `customer_email`, `products: [POLAR_PRODUCT_ID_BASIC|PRO]`, and
+`success_url` = `{ADMIN_UI_URL}/?checkout=success`.
+
+Errors: `401` · `422` plan not `basic` or `pro` · `503` when
+`POLAR_ACCESS_TOKEN` is empty. An empty product id is sent through to Polar
+and fails there — set both product ids before calling this.
+
+### GET /api/v1/billing/portal → 200 (bearer)
+
+```json
+{"portal_url": "https://sandbox.polar.sh/…"}
+```
+
+Errors: `401` · `404` `{"detail": "No subscription on file"}` when
+`polar_customer_id` is still null (no webhook has landed) · `503` Polar
+not configured.
+
+### POST /api/v1/webhooks/polar → 202 (signature)
+
+No bearer token. Raw body + request headers go to
+`polar_sdk.webhooks.validate_event` with `POLAR_WEBHOOK_SECRET`. Polar signs
+with the Standard Webhooks headers (`webhook-id`, `webhook-timestamp`,
+`webhook-signature`).
+
+| Result | Status | Effect |
+|---|---|---|
+| Bad signature | 403 `Invalid webhook signature` | No write |
+| Unknown event type, or any type outside the set below | 202 | No write |
+| Handled event, `customer.external_id` missing | 202 | Warning log, no write (checkout created outside this flow) |
+| Handled event with `external_id` | 202 | `$set` subscription fields on that `user_id` |
+
+Handled types: `subscription.created`, `subscription.updated`,
+`subscription.active`, `subscription.canceled`, `subscription.revoked`.
+
+`product_id == POLAR_PRODUCT_ID_BASIC` stores `plan: "basic"`; any other
+product id stores `plan: "pro"`. Polar status mapping:
+
+| Polar status | Stored `subscription_status` | `plan` field |
+|---|---|---|
+| `trialing`, `active`, `canceled`, `revoked`, `past_due` | same | cleared (`null`) for `canceled` and `revoked`; otherwise the product's plan |
+| `unpaid`, `incomplete_expired` | `revoked` | cleared |
+| `paused`, `incomplete` | `past_due` | kept |
+| event type `subscription.revoked` | `revoked` (wins over the payload status) | cleared |
+
+Also `$set`: `polar_customer_id`, `polar_subscription_id`,
+`current_period_end`. Only an `active` or `trialing` status counts as
+subscribed for [plan limits](#plan-limits-and-ownership).
+
+Local Polar cannot reach `localhost`. Point the sandbox webhook at an
+`ngrok http 8000` URL: `https://<host>/api/v1/webhooks/polar`. One-time
+org / product setup is in the README.
+
+### Environment variables (billing and auth)
+
+Defined in `backend/app/config.py`. Compose passes them from `.env`.
+Auth-only variables (`JWT_*`, `ADMIN_*`, `GOOGLE_*`) are tabulated in
+[`05-auth.md`](05-auth.md#environment-variables).
+
+| Variable | Settings default | Compose | Consumed by |
+|---|---|---|---|
+| `ADMIN_UI_URL` | `http://localhost:3001` | `${ADMIN_UI_URL:-http://localhost:3001}` | Google callback redirect and checkout `success_url` |
+| `POLAR_ACCESS_TOKEN` | `""` | `${POLAR_ACCESS_TOKEN:-}` | backend — empty → checkout, portal, and webhook return 503 |
+| `POLAR_WEBHOOK_SECRET` | `""` | `${POLAR_WEBHOOK_SECRET:-}` | `validate_event`; a mismatch is 403 |
+| `POLAR_ENVIRONMENT` | `sandbox` | `${POLAR_ENVIRONMENT:-sandbox}` | `sandbox` selects the Polar sandbox server; any other value uses production |
+| `POLAR_PRODUCT_ID_BASIC` | `""` | `${POLAR_PRODUCT_ID_BASIC:-}` | Checkout product for `plan: "basic"`; webhook maps this id back to `basic` |
+| `POLAR_PRODUCT_ID_PRO` | `""` | `${POLAR_PRODUCT_ID_PRO:-}` | Checkout product for `plan: "pro"` |
+
 ## Ingestion pipeline
 
 Two entry points share chunking / embedding / Mongo finalize:
@@ -483,9 +657,14 @@ There is no retry endpoint — re-upload the file or re-add the URL (new
 
 | Collection  | Document shape                                                        | Indexes |
 |-------------|-----------------------------------------------------------------------|---------|
-| `companies` | `{company_id, name, created_at, suggested_questions}`                  | `company_id` **unique** |
+| `companies` | `{company_id, name, owner_id, created_at, suggested_questions}`       | `company_id` **unique** · `owner_id` |
 | `documents` | `{document_id, company_id, filename, size_bytes, chunk_count, status, source_type, source_url, error, created_at}` | `document_id` **unique** · `company_id` |
-| `users`     | `{email, password_hash, created_at}`                                  | `email` **unique** |
+| `users`     | `{user_id, email, role, password_hash, google_sub, created_at, plan, subscription_status, polar_customer_id, polar_subscription_id, current_period_end}` | `email` **unique** · `user_id` **unique sparse** · `google_sub` **unique sparse** |
+
+`owner_id` is null only in the window between deploy and the first boot
+backfill. `password_hash` is null for Google-only users. `user_id` and
+`google_sub` indexes are sparse so a legacy row missing the field does not
+collide on null.
 
 ### ChromaDB
 
@@ -501,11 +680,77 @@ company's chunks.
 
 ## End-to-end curl walkthrough
 
-Prerequisite: `OPENAI_API_KEY` **and** `ADMIN_PASSWORD` set in `.env`, stack up.
-A real OpenAI key is required for upload, `/retrieve`, `/chat`, and `/hint`.
-The browser path (login → create → upload → copy snippet) is in the README and
+Prerequisite: `OPENAI_API_KEY` set in `.env`, stack up. The superadmin curl
+path also needs `ADMIN_PASSWORD`. The self-service path below needs Polar
+(`POLAR_ACCESS_TOKEN`, both product ids, webhook secret) and a public tunnel
+so Polar can POST the webhook. A real OpenAI key is required for upload,
+`/retrieve`, `/chat`, and `/hint`. The browser path (superadmin login →
+create → upload → copy snippet) is in the README and
 [`04-admin.md`](04-admin.md); this is the debug path. Chat/hint runtime:
 [`06-ai-layer.md`](06-ai-layer.md).
+
+### Register → checkout → webhook → create company
+
+Superadmin can skip this block (seeded login, no Polar). A `user` cannot
+create a company until the webhook writes `subscription_status`.
+
+```bash
+# 1. register (password ≥ 8). Duplicate email → 409.
+TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ada@example.com","password":"long-enough"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
+curl -s localhost:8000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+# → role "user", plan null, limits {"max_companies":0,"url_ingestion":false}
+
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/api/v1/companies \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Acme Corp"}'
+# → 402  (no subscription yet)
+
+# 2. checkout. Open checkout_url in a browser and pay with a Polar test card.
+#    503 if POLAR_ACCESS_TOKEN is empty. 422 if plan is not basic|pro.
+curl -s -X POST localhost:8000/api/v1/billing/checkout \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"plan":"basic"}'
+# → {"checkout_url":"https://sandbox.polar.sh/checkout/…"}
+
+# 3. webhook. Polar POSTs to the public URL you configured
+#    (ngrok http 8000 → https://<host>/api/v1/webhooks/polar).
+#    A hand-crafted body without Polar's signature is rejected:
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/api/v1/webhooks/polar \
+  -H 'Content-Type: application/json' -d '{}'
+# → 403
+
+# After the signed subscription.created (or .active) event:
+curl -s localhost:8000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+# → plan "basic", subscription_status "trialing" (trial days live on the Polar product),
+#   limits {"max_companies":1,"url_ingestion":false}
+
+# 4. create the one Basic company, then the gates
+curl -s -X POST localhost:8000/api/v1/companies \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Acme Corp"}'
+# → 201  {"company_id":"cmp_…","owner_id":"usr_…",…}
+
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/api/v1/companies \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Second"}'
+# → 403  (Basic cap is 1; existing company stays readable)
+
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  "localhost:8000/api/v1/companies/cmp_YOUR_ID/documents/from-url" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"urls":["https://support.example.com/reset-password"]}'
+# → 403  (URL ingest is Pro)
+
+curl -s localhost:8000/api/v1/billing/portal -H "Authorization: Bearer $TOKEN"
+# → {"portal_url":"…"} after polar_customer_id is set; 404 before the webhook
+```
+
+Pro is the same checkout body with `{"plan":"pro"}` (`max_companies` 10,
+`url_ingestion` true). File upload on the company from step 4 works on Basic.
 
 ```bash
 docker compose up --build -d
@@ -526,7 +771,7 @@ curl -s localhost:8000/api/v1/companies
 curl -s -X POST localhost:8000/api/v1/companies \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"name": "Acme Corp"}'
-# → {"company_id":"cmp_1a2b3c4d","name":"Acme Corp","created_at":"…","suggested_questions":[]}
+# → {"company_id":"cmp_1a2b3c4d","name":"Acme Corp","owner_id":"usr_…","created_at":"…","suggested_questions":[]}
 
 # 1b. public widget-config (no token) — empty until PATCH
 curl -s localhost:8000/api/v1/companies/cmp_1a2b3c4d/widget-config
@@ -627,8 +872,14 @@ curl -s -X POST localhost:8000/api/v1/hint \
 
 | Symptom | Cause | Behavior / fix |
 |---|---|---|
-| `401 {"detail":"Missing bearer token"}` on companies/documents | No `Authorization` header | `POST /api/v1/auth/login` first; pass `Authorization: Bearer $TOKEN` |
-| `401 {"detail":"Invalid email or password"}` | Wrong creds, or `ADMIN_PASSWORD` unset so seeding was skipped | Set `ADMIN_PASSWORD` in `.env`, restart backend, use that password |
+| `401 {"detail":"Missing bearer token"}` on companies/documents/billing | No `Authorization` header | `POST /api/v1/auth/login` or `/auth/register` first; pass `Authorization: Bearer $TOKEN` |
+| `401 {"detail":"Invalid email or password"}` | Wrong creds, Google-only account, or `ADMIN_PASSWORD` unset so the superadmin was not seeded | Set `ADMIN_PASSWORD` for the seed account, or register a user |
+| `402` on `POST /companies` | Caller has no `active` / `trialing` subscription | Checkout, then wait for the Polar webhook (`GET /auth/me`) |
+| `403` on a second `POST /companies` | At the plan cap (Basic 1, Pro 10). Existing companies stay listable | Upgrade via `POST /billing/checkout {"plan":"pro"}` or the portal |
+| `403` on `POST …/from-url` | Plan is not Pro (or no subscription) | Pro checkout; file upload is still allowed |
+| `404` on a company you did not create | `owner_id` mismatch (same body as a missing id) | Use an id from `GET /companies` |
+| `403 {"detail":"Invalid webhook signature"}` | Body not signed with `POLAR_WEBHOOK_SECRET`, or secret rotated in Polar but not `.env` | Copy the endpoint secret, restart backend |
+| `503` on `/billing/*` or `/webhooks/polar` | `POLAR_ACCESS_TOKEN` empty | Set it in `.env`, restart. The rest of the API still boots |
 | `401 {"detail":"Invalid or expired token - sign in again"}` | Expired / tampered JWT, or `JWT_SECRET` changed | Login again |
 | `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` on upload / retrieve / chat / hint | Empty `OPENAI_API_KEY` | Stack boots fine (Phase 0 behavior preserved); set the key in `.env`, `docker compose up -d` |
 | Chat stream ends with `event: error` | LLM/network failure after tokens were sent | HTTP status stays 200; treat the assistant message as failed. See [`06-ai-layer.md`](06-ai-layer.md#failure-modes) |
@@ -661,6 +912,9 @@ in-memory fakes; no Mongo/Chroma/network needed):
 | `test_chat_graph.py` | Single message skips condense; retrieval `(company_id, query, 5)`; answer produced |
 | `test_company_models.py` | Widget-config caps (blank / >120 chars / >4 items) and trim |
 | `test_widget_config_routes.py` | Public GET 200/404; PATCH without token is 401 |
+| `test_auth_service.py` / `test_auth_routes.py` | Register, duplicate 409, short password 422, Google 503/307, `/me` limits |
+| `test_billing_service.py` / `test_billing_routes.py` | Checkout payload, portal 404, webhook signature 403, unrelated event 202, status map |
+| `test_company_ownership.py` | 402 without a plan, Basic/Pro caps, URL-ingest 403, cross-user 404, superadmin, owner backfill |
 
 ```bash
 cd backend && pip install -r requirements-dev.txt && python -m pytest tests/ -v

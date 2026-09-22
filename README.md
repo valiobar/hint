@@ -13,8 +13,8 @@ doc to upload.
 
 | Service | Tech | Host port | Purpose |
 |---|---|---|---|
-| `backend` | FastAPI (Python 3.12) | 8000 | Auth, companies, document ingestion, retrieval, chat (SSE), hints (`docs/02-backend.md`, `docs/05-auth.md`, `docs/06-ai-layer.md`) |
-| `mongo` | mongo:7 | — (internal) | companies, documents, users |
+| `backend` | FastAPI (Python 3.12) | 8000 | Auth, Polar billing, companies, document ingestion, retrieval, chat (SSE), hints (`docs/02-backend.md`, `docs/05-auth.md`, `docs/06-ai-layer.md`) |
+| `mongo` | mongo:7 | — (internal) | companies (per owner), documents, users (plan on the user) |
 | `chromadb` | chromadb/chroma:0.5.23 | — (internal) | per-company vector collections |
 | `admin` | React + Vite → nginx | 3001 | company + KB management (`docs/04-admin.md`) |
 | `widget-cdn` | Vite IIFE → nginx | 1337 | `loader.js` + hashed `hint-widget.js` |
@@ -23,17 +23,19 @@ doc to upload.
 Traffic: Admin / Demo / Widget (browser) → Backend (`:8000`). Mongo and
 Chroma stay on the compose network only. Chroma listens on 8000 *inside*
 the network (same as backend) but is never published to the host. Admin
-companies/documents calls send a JWT; `/retrieve`, `/chat`, `/hint`,
-`GET /companies/{id}/widget-config`, and `/health` stay public so the
-embed works without credentials.
+companies/documents/billing calls send a JWT; `/retrieve`, `/chat`,
+`/hint`, `GET /companies/{id}/widget-config`, and `/health` stay public
+so the embed works without credentials. Polar webhooks are
+signature-checked, not JWT-checked.
 
 ## Quick start
 
 ```bash
 cp .env.example .env
 # Required before first boot:
-#   ADMIN_PASSWORD   — preset admin login (empty disables login entirely)
+#   ADMIN_PASSWORD   — seeded superadmin login (empty skips that seed only)
 #   OPENAI_API_KEY   — upload, /retrieve, /chat, /hint (503 without it)
+# Google and Polar are optional at boot — see "One-time external setup".
 docker compose up --build
 ```
 
@@ -55,13 +57,60 @@ On a remote host, keep the same ports and replace `localhost` with that
 IP. Production (DigitalOcean droplet, GHCR + `deploy.sh`) is documented
 in [`docs/deployment.md`](docs/deployment.md).
 
+## One-time external setup
+
+The stack boots without these. The seeded superadmin
+(`ADMIN_EMAIL` / `ADMIN_PASSWORD`) can create companies and ingest files
+with no Polar account. Self-service users, Google sign-in, and paid plans
+need the accounts below. Click-by-click (where each token comes from,
+sandbox vs production, and how to prove it in Admin):
+[`plans/polar_sandbox_and_google_auth_setup.md`](plans/polar_sandbox_and_google_auth_setup.md).
+API shapes: [`docs/02-backend.md`](docs/02-backend.md#register--checkout--webhook--create-company).
+
+**Polar sandbox**
+
+1. Create a sandbox organization at [polar.sh](https://polar.sh).
+2. Create two products, **Basic** and **Pro**. Set trial days on each
+   product (Hint does not store a trial length; Polar does).
+3. Copy each product id into `.env` as `POLAR_PRODUCT_ID_BASIC` and
+   `POLAR_PRODUCT_ID_PRO`.
+4. Create an organization access token → `POLAR_ACCESS_TOKEN`.
+   Leave `POLAR_ENVIRONMENT=sandbox`.
+5. Add a webhook endpoint. Local Polar cannot call `localhost`. In
+   another terminal run `ngrok http 8000` and set the endpoint URL to
+   `https://<ngrok-host>/api/v1/webhooks/polar`. Copy the signing secret
+   to `POLAR_WEBHOOK_SECRET`.
+6. `docker compose up -d backend` so the container re-reads `.env`.
+
+Handled events and the signature check:
+[`docs/02-backend.md`](docs/02-backend.md#post-apiv1webhookspolar--202-signature).
+Empty `POLAR_ACCESS_TOKEN` makes checkout, portal, and the webhook return
+503; the rest of the API stays up.
+
+**Google sign-in**
+
+1. In Google Cloud Console, create an OAuth client of type **Web
+   application**.
+2. Authorized redirect URI must equal `GOOGLE_REDIRECT_URI`
+   (default `http://localhost:8000/api/v1/auth/google/callback`).
+3. Put the client id and secret in `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`. `ADMIN_UI_URL` (default
+   `http://localhost:3001`) is where the callback redirects with
+   `#token=…`.
+4. Restart the backend. Empty `GOOGLE_CLIENT_ID` makes
+   `GET /api/v1/auth/google/login` return 503.
+
+Contract, including secret rotation: [`docs/05-auth.md`](docs/05-auth.md).
+
 ## Try it (Admin → Demo → widget)
 
 With `ADMIN_PASSWORD` and `OPENAI_API_KEY` set, stack up:
 
 1. Open http://localhost:3001 — login screen.
 2. Sign in with `ADMIN_EMAIL` (default `admin@hint.local`) and the
-   `ADMIN_PASSWORD` from `.env`.
+   `ADMIN_PASSWORD` from `.env`. That account is the superadmin: it
+   skips plan limits. A registered user needs a Polar subscription
+   before `POST /companies` returns 201.
 3. Create a company (name, 1–100 characters). Copy the `cmp_…` id.
 4. Drop or browse product docs (`.pdf`, `.md`, `.txt`, `.html`, ≤ 10 MB).
    Rows go `uploading` → `ready` (or `failed` — e.g. a scanned PDF).
@@ -98,6 +147,7 @@ isolation from the host page).
 | Feature | What to expect |
 |---|---|
 | Guide bar | Chat toggle + lightbulb (hover-hint mode); drag to dock left/right |
+| First-run callout | After ~1.5 s on the first 5 page opens per company; click opens chat, X hides it for this load |
 | Chat | SSE token stream, source filenames, follow-ups, page-aware answers |
 | Starter chips | Empty-state chips from Admin (`GET …/widget-config`, in-memory cache; reload to pick up edits) |
 | Markdown | Numbered/bullet lists and inline code in assistant bubbles |
@@ -160,10 +210,19 @@ backend; the variables below are the ones you normally set on the host.
 | Variable | Default | Consumed by | Notes |
 |---|---|---|---|
 | `IMAGE_TAG` | `latest` | compose (prod) | GHCR tag; CI writes the git SHA into the VPS `.env` |
-| `ADMIN_PASSWORD` | `""` | backend | **Required** for admin login; empty skips seeding and every login is 401 |
-| `ADMIN_EMAIL` | `admin@hint.local` | backend | Preset admin email (normalized to lowercase) |
+| `ADMIN_PASSWORD` | `""` | backend | **Required** for the seeded superadmin; empty skips that seed. `POST /auth/register` still works |
+| `ADMIN_EMAIL` | `admin@hint.local` | backend | Superadmin email (normalized to lowercase) |
 | `JWT_SECRET` | `dev-insecure-secret-change-me` | backend | Change before any shared/deployed stack |
-| `ACCESS_TOKEN_TTL_MINUTES` | `720` | backend | Access-token lifetime (no refresh token in the POC) |
+| `ACCESS_TOKEN_TTL_MINUTES` | `720` | backend | Access-token lifetime (no refresh token) |
+| `ADMIN_UI_URL` | `http://localhost:3001` | backend | Redirect after Google and Polar checkout |
+| `GOOGLE_CLIENT_ID` | `""` | backend | Empty → Google routes return 503 |
+| `GOOGLE_CLIENT_SECRET` | `""` | backend | OAuth code exchange |
+| `GOOGLE_REDIRECT_URI` | `http://localhost:8000/api/v1/auth/google/callback` | backend | Must match the Google Cloud client |
+| `POLAR_ACCESS_TOKEN` | `""` | backend | Empty → billing routes and the webhook return 503 |
+| `POLAR_WEBHOOK_SECRET` | `""` | backend | Polar webhook signature |
+| `POLAR_ENVIRONMENT` | `sandbox` | backend | `sandbox` or production |
+| `POLAR_PRODUCT_ID_BASIC` | `""` | backend | Basic product (1 company, files only) |
+| `POLAR_PRODUCT_ID_PRO` | `""` | backend | Pro product (10 companies, files and URLs) |
 | `OPENAI_API_KEY` | `""` | backend | Required for upload, `/retrieve`, `/chat`, `/hint` (503 without it); stack boots without it |
 | `LLM_PROVIDER` | `openai` | backend | Chat / hint factory; unknown value raises at first LLM call |
 | `LLM_MODEL` | `gpt-4o-mini` | backend | Chat / hint model |
@@ -188,8 +247,10 @@ cd admin  && pnpm install && pnpm dev
 
 ## Debug path: curl
 
-Same flow over HTTP. Obtain a token first — companies/documents return
-401 without it. `POST /api/v1/retrieve`, `/chat`, `/hint`, and
+Same flow over HTTP. Obtain a token first — companies/documents/billing
+return 401 without it. The sample below uses the superadmin, who is not
+plan-gated. Register → checkout → webhook is a separate walkthrough in
+`docs/02-backend.md`. `POST /api/v1/retrieve`, `/chat`, `/hint`, and
 `GET /api/v1/companies/{id}/widget-config` stay public (widget path).
 Full contracts: `docs/02-backend.md`. AI runtime:
 `docs/06-ai-layer.md`.
@@ -252,15 +313,18 @@ tag.
 
 Widget + Admin + AI layer are in one runnable POC:
 
-- **Admin** — preset-admin JWT, companies, ingest, embed snippet,
-  starter questions
+- **Admin** — email sign-up and sign-in, Google, Polar Basic / Pro checkout,
+  companies, ingest, embed snippet, starter questions. The seeded superadmin
+  skips billing.
 - **Widget** — Shadow DOM guide bar, streamed chat, empty-state
   starter chips, hover hints, chips, walkthroughs, markdown / copy /
   new chat
-- **Backend** — LangGraph RAG chat (SSE) and cached hover hints
+- **Backend** — multi-user auth, Polar plans (Basic / Pro), LangGraph
+  RAG chat (SSE), and cached hover hints
 
-This is still a POC: one admin user, no OCR, no server-side chat
-history, hint cache is in-process.
+This is still a POC: no OCR, no server-side chat history, hint cache is
+in-process, no refresh tokens. Plan limits apply to registered users;
+the seeded superadmin bypasses them.
 
 ## Docs
 
@@ -268,8 +332,9 @@ history, hint cache is in-process.
 |---|---|
 | [`docs/HOW_TO_PLAY.md`](docs/HOW_TO_PLAY.md) | Product walkthrough and feature checklist |
 | [`docs/deployment.md`](docs/deployment.md) | Production: GHCR images, `deploy.sh`, droplet + GitHub secrets |
-| [`docs/01-architecture-overview.md`](docs/01-architecture-overview.md) | Stack, ports, widget inventory |
+| [`docs/01-architecture-overview.md`](docs/01-architecture-overview.md) | Stack, ports, embed contract |
 | [`docs/02-backend.md`](docs/02-backend.md) | API + ingestion |
+| [`docs/03-widget.md`](docs/03-widget.md) | Widget architecture, dependencies, runtime |
 | [`docs/04-admin.md`](docs/04-admin.md) | Admin SPA |
 | [`docs/05-auth.md`](docs/05-auth.md) | Auth contract |
 | [`docs/06-ai-layer.md`](docs/06-ai-layer.md) | LangGraph, SSE, hint cache, walkthrough prompt |

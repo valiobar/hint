@@ -38,6 +38,15 @@ services:
       - ACCESS_TOKEN_TTL_MINUTES=${ACCESS_TOKEN_TTL_MINUTES:-720}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@hint.local}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_UI_URL=${ADMIN_UI_URL:-http://localhost:3001}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/v1/auth/google/callback}
+      - POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-}
+      - POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-}
+      - POLAR_ENVIRONMENT=${POLAR_ENVIRONMENT:-sandbox}
+      - POLAR_PRODUCT_ID_BASIC=${POLAR_PRODUCT_ID_BASIC:-}
+      - POLAR_PRODUCT_ID_PRO=${POLAR_PRODUCT_ID_PRO:-}
     depends_on:
       mongo:
         condition: service_healthy

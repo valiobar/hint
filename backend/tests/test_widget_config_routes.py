@@ -51,7 +51,7 @@ def test_public_get_returns_questions() -> None:
 
 
 def test_patch_requires_auth() -> None:
-    # Router-level require_admin still resolves get_auth_service → Mongo.
+    # Router-level require_user still resolves get_auth_service → Mongo.
     # Override it so the 401 path is tested without a live database.
     app.dependency_overrides[get_company_service] = lambda: FakeCompanyService()
     app.dependency_overrides[get_auth_service] = lambda: object()

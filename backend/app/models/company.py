@@ -25,6 +25,7 @@ class Company(BaseModel):
     company_id: str  # short slug, e.g. "cmp_a1b2c3d4"
     name: str
     created_at: datetime
+    owner_id: str | None = None  # None only for legacy docs before boot backfill
     suggested_questions: list[str] = Field(default_factory=list)
 
 

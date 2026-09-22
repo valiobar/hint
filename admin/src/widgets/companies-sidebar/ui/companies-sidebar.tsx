@@ -1,8 +1,11 @@
 import { useShallow } from 'zustand/react/shallow';
 import { CompanyListItem } from '@/entities/company';
 import { CreateCompanyForm } from '@/features/create-company';
-import { useAdminStore } from '@/shared/store/admin-store';
-import { EmptyState, Spinner, Wordmark } from '@/shared/ui';
+import {
+	selectCanCreateCompany,
+	useAdminStore,
+} from '@/shared/store/admin-store';
+import { Button, EmptyState, Spinner, Wordmark } from '@/shared/ui';
 import styles from './companies-sidebar.module.css';
 
 export const CompaniesSidebar = () => {
@@ -16,6 +19,9 @@ export const CompaniesSidebar = () => {
 			})),
 		);
 	const selectCompany = useAdminStore((s) => s.selectCompany);
+	const canCreate = useAdminStore(selectCanCreateCompany);
+	const maxCompanies = useAdminStore((s) => s.me?.limits.max_companies ?? 0);
+	const plan = useAdminStore((s) => s.me?.plan);
 
 	return (
 		<aside className={styles.sidebar} data-testid="companies-sidebar">
@@ -26,7 +32,25 @@ export const CompaniesSidebar = () => {
 				<h2 id="companies-heading" className={styles.heading}>
 					Companies
 				</h2>
-				<CreateCompanyForm />
+				{canCreate ? (
+					<CreateCompanyForm />
+				) : (
+					<div className={styles.limitNotice} data-testid="company-limit-notice">
+						<p>
+							Plan limit reached ({maxCompanies}{' '}
+							{maxCompanies === 1 ? 'company' : 'companies'}).
+						</p>
+						{plan !== 'pro' ? (
+							<Button
+								onClick={() =>
+									useAdminStore.setState({ showBilling: true })
+								}
+							>
+								Upgrade plan
+							</Button>
+						) : null}
+					</div>
+				)}
 				{isLoadingCompanies && <Spinner />}
 				{companiesError && (
 					<p className={styles.error} role="alert">

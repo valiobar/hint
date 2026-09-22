@@ -32,6 +32,21 @@
 	font-size: 0.88rem;
 }
 
+.planPill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.2rem 0.55rem;
+	border: 1px solid rgb(23 178 106 / 0.28);
+	border-radius: var(--radius-pill);
+	background: var(--color-ok-soft);
+	color: var(--color-ok);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	line-height: 1.2;
+	text-transform: lowercase;
+}
+
 .visuallyHidden {
 	position: absolute;
 	width: 1px;

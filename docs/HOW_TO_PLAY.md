@@ -36,7 +36,7 @@ widget without embedding it in a real product.
 
 | Screen | Local URL | Who uses it | What it is |
 |---|---|---|---|
-| **Admin** | http://localhost:3001 | You (operator) | Login, companies, upload docs, copy the embed snippet |
+| **Admin** | http://localhost:3001 | You (operator) | Sign up or sign in, subscribe (Basic / Pro), companies, upload docs, copy the embed snippet |
 | **Demo** | http://localhost:3002 | Stand-in for a customer app | Fake invoicing UI + the Hint widget |
 | **API** | http://localhost:8000/docs | Debug | Swagger for login / companies / chat / hints |
 
@@ -61,10 +61,11 @@ docker compose up --build
 
 You need:
 
-- **`ADMIN_PASSWORD`** — otherwise every Admin login is 401
 - **`OPENAI_API_KEY`** — otherwise upload / chat / hints return 503
+- **`ADMIN_PASSWORD`** — only for the seeded superadmin shortcut below. Email sign-up works without it
+- **Polar sandbox** — for the register-and-subscribe path: `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_ID_BASIC`, `POLAR_PRODUCT_ID_PRO`, and a public webhook URL (README checklist). `POLAR_ENVIRONMENT=sandbox`
 
-Default email: `admin@hint.local` (or whatever you set as `ADMIN_EMAIL`).
+Default superadmin email: `admin@hint.local` (or whatever you set as `ADMIN_EMAIL`). Google sign-in also needs `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ---
 
@@ -72,11 +73,31 @@ Default email: `admin@hint.local` (or whatever you set as `ADMIN_EMAIL`).
 
 Do this once in order. After that, skip around the feature list.
 
-### 1. Sign in to Admin
+### 1. Register and subscribe
 
 Open http://localhost:3001 (or `http://YOUR_IP:3001`).
 
-Sign in with the admin email and password from `.env`.
+Click **No account yet? Sign up** (or **Continue with Google**). Create
+the account. You land on **Choose your plan**, not the company list.
+
+Click **Subscribe** on Basic or Pro. Polar sandbox opens. Pay with the
+test card:
+
+| Field | Value |
+|---|---|
+| Card | `4242 4242 4242 4242` |
+| Expiry | Any future date |
+| CVC | Any 3 digits |
+
+Polar sends you back to Admin with `?checkout=success`. Wait on
+**Finalizing your subscription…** until the panel appears. The header
+shows a plan line such as `basic · trialing`. Trial length is whatever
+you set on the Polar product.
+
+**Superadmin shortcut.** Skip signup and checkout: sign in with
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`. That account has no plan
+line, no **Billing** button, and no company or URL cap. Use it when
+Polar is not configured.
 
 ### 2. Create a company
 
@@ -84,6 +105,10 @@ Name it something obvious, e.g. `Acme Invoicing`.
 
 The UI shows a `cmp_…` id. **Copy that id.** It is unique to this
 database (laptop and server do not share companies).
+
+On Basic you can create one company. The sidebar then shows **Plan
+limit reached (1 company).** and **Upgrade plan**. Pro allows 10. A
+Pro account at 10 sees the same notice without the upgrade button.
 
 ### 3. Upload a knowledge base
 
@@ -120,8 +145,8 @@ Or type:
 
 > How do I create an invoice?
 
-Tokens should stream in. A finished answer may list **source filenames**
-under the bubble.
+Tokens should stream in. A finished answer may list **sources** under
+the bubble (a filename, or the host and path of a URL you ingested).
 
 ### 6. Hover hints
 
@@ -148,11 +173,17 @@ control to advance).
 
 | Feature | How to try | What “good” looks like |
 |---|---|---|
-| Login | Email + password from `.env` | Two-pane app; email in the header |
-| Stay signed in | Refresh the tab | Still signed in (`localStorage` JWT) |
-| Sign out | Header button | Back to the login screen |
-| Create company | Name, 1–100 characters | Appears in the sidebar, auto-selected, `cmp_…` id |
+| Sign up | **No account yet? Sign up**, valid email, password with upper, lower, number, symbol | **Choose your plan** (no companies yet) |
+| Google | **Continue with Google** | Same as sign-up or sign-in, depending on whether that account already has a plan. `#error=…` stays on the auth screen |
+| Subscribe | **Subscribe** on Basic or Pro, sandbox card `4242 4242 4242 4242` | Polling screen, then the panel. Header pill like `basic · trialing` |
+| Billing again | Header **Billing** | Plan cards. **Back to panel** returns. **Manage subscription** opens the Polar portal in a new tab |
+| Superadmin login | Email + password from `.env` | Panel immediately. No pill, no **Billing**, no create/URL gate |
+| Stay signed in | Refresh the tab | Still signed in (`localStorage` JWT). A user without an active plan sees billing again |
+| Sign out | Header button, or **Sign out** on the billing screen | Back to the auth screen |
+| Create company | Name, 1–100 characters, while under the plan cap | Appears in the sidebar, auto-selected, `cmp_…` id |
+| Plan cap | Basic with 1 company, or Pro with 10 | Create form becomes **Plan limit reached**. Basic also shows **Upgrade plan** |
 | Upload docs | Drop or browse `.pdf` / `.md` / `.txt` / `.html` | Status `uploading` → `ready` |
+| Paste support URLs | Company detail, under the dropzone — one `http`/`https` URL per line (max 20) | On Pro and superadmin: row goes `ready`, or `failed` if the page is empty or JS-rendered. On Basic the form is replaced by **URL ingestion is a Pro feature** and **Upgrade** |
 | Failed ingest | Upload a scanned PDF | Status `failed` with a reason; other files in the same batch can still succeed |
 | Copy embed snippet | Company detail pane | `<script src="…/loader.js" data-hint-company-id="cmp_…" data-hint-api-url="…">` |
 | Starter questions | Company detail, under the snippet — save up to 4 lines | Demo empty chat shows those chips after a **reload** of the host page |
@@ -165,6 +196,7 @@ Admin does **not** include end-user chat. Use Demo for that.
 | Feature | How to try | What “good” looks like |
 |---|---|---|
 | Embed | Demo loads `loader.js` | Guide bar appears (bottom). Duplicate script on the demo page is intentional — console warns, second tag is ignored |
+| First-run callout | Open Demo for a company you have not visited five times | After about 1.5 s a note appears by the bar (“ask me anything about this app”). Click it to open chat; the X hides it for this page load. It stops after 5 page opens for that company (`localStorage`) |
 | Open / close chat | Chat icon on the bar | Panel slides open as a dialog titled Hint |
 | Hover-hint mode | Lightbulb on the bar | Hover a control ~0.5 s → tooltip |
 | Drag the bar | Grip on the bar | Bar moves; it remembers side (left/right) and height for this tab |
@@ -174,7 +206,7 @@ Admin does **not** include end-user chat. Use Demo for that.
 | Feature | How to try | What “good” looks like |
 |---|---|---|
 | Streamed answer | Ask a how-to from the uploaded docs | Tokens appear as they generate; not one dump at the end |
-| Grounding | Ask something in the doc | Answer matches the KB; **sources** (filenames) under the bubble |
+| Grounding | Ask something in the doc | Answer matches the KB; **sources** under the bubble (filename, or host + path for a URL) |
 | Page awareness | Ask a how-to while on the wrong tab | Answer may start with “go to Invoices / Reports first” instead of inventing a hidden button |
 | Follow-up | Ask “and then what?” | Uses conversation history (condenses into a new search query) |
 | Markdown | Ask for steps | Numbered/bullet lists and `` `code` `` render as lists/code, not a wall of text |
@@ -315,7 +347,8 @@ machine. Production images bake those URLs at CI build time — see
 | Widget missing on Demo | `loader.js` still loaded from `localhost:1337` | Point the script `src` at `http://HOST:1337/embed/v1/loader.js` |
 | Chat / login 404 `Unknown company_id` | Id from another machine, or never created here | Create a company on **this** Admin; open Demo with `?company_id=cmp_…` |
 | Chat / upload 503 | Missing `OPENAI_API_KEY` | Set it in `.env`, restart `backend` |
-| Login always 401 | Empty `ADMIN_PASSWORD` at boot (user never seeded) | Set password, restart `backend` |
+| Superadmin login always 401 | Empty `ADMIN_PASSWORD` at boot (superadmin never seeded) | Set password, restart `backend`. Sign-up still works |
+| **Subscribe** errors, or checkout never unlocks the panel | Polar env empty, or the webhook cannot reach this machine | Set `POLAR_*`, expose the webhook (README). Then refresh Admin |
 | Hints empty / wrong | Lightbulb off, or KB not `ready`, or wrong company | Toggle lightbulb; wait for `ready`; check the query param |
 | Copy does nothing on http:// | Insecure origin, no clipboard | Expected on plain HTTP; try the text still in the bubble |
 | Guide bar never appears | Ad blocker, or `company_id` missing on the script | Check the console; confirm `loader.js` returns 200 |
@@ -333,7 +366,9 @@ curl -s http://localhost:8000/health
 
 Useful so testers do not file these as bugs:
 
-- No self-registration or “forgot password” — one preset admin
+- No “forgot password” or password change in Admin
+- The seeded superadmin (`ADMIN_EMAIL`) skips Polar and plan limits.
+  A registered Basic or Pro account does not
 - No OCR for scanned PDFs
 - No server-side chat history (refresh is `sessionStorage` only)
 - No analytics, thumbs-up/down, or theming API
@@ -352,5 +387,6 @@ Useful so testers do not file these as bugs:
 | [`README.md`](../README.md) | Quick start, env vars |
 | [`demo/ADMIN_USER_MANUAL.md`](../demo/ADMIN_USER_MANUAL.md) | Every Admin screen and error |
 | [`demo/USER_MANUAL.md`](../demo/USER_MANUAL.md) | Every Demo control |
-| [`01-architecture-overview.md`](01-architecture-overview.md) | Services, ports, widget inventory |
+| [`01-architecture-overview.md`](01-architecture-overview.md) | Services, ports, embed contract |
+| [`03-widget.md`](03-widget.md) | Widget architecture, store, chat, hints, walkthroughs |
 | [`06-ai-layer.md`](06-ai-layer.md) | Chat / hint pipelines, walkthrough prompt contract |

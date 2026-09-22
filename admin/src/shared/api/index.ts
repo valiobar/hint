@@ -5,8 +5,16 @@ export type {
 	DocumentStatus,
 	SourceType,
 } from '@/shared/api/types';
-export type { AdminUser, LoginResponse } from '@/shared/api/auth';
-export { login, fetchMe } from '@/shared/api/auth';
+export type {
+	LoginResponse,
+	Me,
+	Plan,
+	PlanLimits,
+	Role,
+	SubscriptionStatus,
+} from '@/shared/api/auth';
+export { fetchMe, googleLoginUrl, login, register } from '@/shared/api/auth';
+export { createCheckout, getPortalUrl } from '@/shared/api/billing';
 export {
 	listCompanies,
 	createCompany,

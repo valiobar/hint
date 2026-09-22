@@ -5,13 +5,15 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.config import get_settings
 from app.db.chroma import get_chroma
 from app.db.mongo import get_db
+from app.models.billing import resolve_limits
 from app.models.company import Company
-from app.models.user import AdminUser
+from app.models.user import UserInDB
 from app.repositories.company_repo import CompanyRepository
 from app.repositories.document_repo import DocumentRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.vector_repo import VectorRepository
 from app.services.auth_service import AuthService
+from app.services.billing_service import BillingService
 from app.services.company_service import CompanyService
 from app.services.hint_cache import HintCache
 from app.services.ingestion_service import IngestionService
@@ -33,10 +35,23 @@ def get_auth_service(
     return AuthService(repo, get_settings())
 
 
-async def require_admin(
+def get_billing_service() -> BillingService:
+    settings = get_settings()
+    if not settings.polar_access_token:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Polar billing is not configured; "
+                "set POLAR_ACCESS_TOKEN in .env and restart"
+            ),
+        )
+    return BillingService(get_user_repo(), settings)
+
+
+async def require_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     svc: AuthService = Depends(get_auth_service),
-) -> AdminUser:
+) -> UserInDB:
     if credentials is None:
         raise HTTPException(
             status_code=401,
@@ -56,7 +71,7 @@ async def require_admin(
         raise HTTPException(
             status_code=401, detail="Unknown user", headers=_UNAUTHORIZED_HEADERS
         )
-    return AdminUser(email=user.email, created_at=user.created_at)
+    return user
 
 
 def get_company_repo() -> CompanyRepository:
@@ -117,3 +132,24 @@ async def require_company(
     if company is None:
         raise HTTPException(status_code=404, detail="Unknown company_id")
     return company
+
+
+async def require_owned_company(
+    company_id: str,
+    user: UserInDB = Depends(require_user),
+    repo: CompanyRepository = Depends(get_company_repo),
+) -> Company:
+    company = await repo.find_by_company_id(company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Unknown company_id")
+    if user.role != "superadmin" and company.owner_id != user.user_id:
+        raise HTTPException(status_code=404, detail="Unknown company_id")
+    return company
+
+
+async def require_url_ingestion(user: UserInDB = Depends(require_user)) -> None:
+    if not resolve_limits(user).url_ingestion:
+        raise HTTPException(
+            status_code=403,
+            detail="URL ingestion is a Pro feature — upgrade your plan",
+        )
