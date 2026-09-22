@@ -47,7 +47,7 @@ def _event(
     *,
     type_: str = "subscription.created",
     user_id: str | None = "usr_aaa11111",
-    product_id: str = "prod_basic",
+    product_id: str | None = "prod_basic",
     status: str = "trialing",
     period_end: datetime | None = None,
 ) -> SimpleNamespace:
@@ -139,6 +139,54 @@ async def test_apply_webhook_clears_plan_when_access_ends(
         await svc.apply_webhook(b"{}", {"webhook-id": "1"})
     assert repo.updates[0][1]["plan"] is plan
     assert repo.updates[0][1]["subscription_status"] == status
+
+
+@pytest.mark.asyncio
+async def test_apply_webhook_maps_pro_product_id() -> None:
+    repo = FakeUserRepo()
+    svc = _svc(repo)
+    with patch(
+        "app.services.billing_service.validate_event",
+        return_value=_event(product_id="prod_pro", status="active"),
+    ):
+        await svc.apply_webhook(b"{}", {"webhook-id": "1"})
+    assert repo.updates[0][1]["plan"] == "pro"
+    assert repo.updates[0][1]["subscription_status"] == "active"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product_id", ["prod_other", None, ""])
+async def test_apply_webhook_skips_plan_write_for_unknown_product(
+    product_id: str | None,
+) -> None:
+    repo = FakeUserRepo()
+    svc = _svc(repo)
+    with patch(
+        "app.services.billing_service.validate_event",
+        return_value=_event(product_id=product_id, status="active"),
+    ):
+        await svc.apply_webhook(b"{}", {"webhook-id": "1"})
+    assert repo.updates
+    fields = repo.updates[0][1]
+    assert "plan" not in fields
+    assert fields["subscription_status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_apply_webhook_clears_plan_on_cancel_even_if_product_unknown() -> None:
+    repo = FakeUserRepo()
+    svc = _svc(repo)
+    with patch(
+        "app.services.billing_service.validate_event",
+        return_value=_event(
+            type_="subscription.canceled",
+            product_id="prod_other",
+            status="canceled",
+        ),
+    ):
+        await svc.apply_webhook(b"{}", {"webhook-id": "1"})
+    assert repo.updates[0][1]["plan"] is None
+    assert repo.updates[0][1]["subscription_status"] == "canceled"
 
 
 @pytest.mark.asyncio

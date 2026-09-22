@@ -557,16 +557,19 @@ with the Standard Webhooks headers (`webhook-id`, `webhook-timestamp`,
 | Unknown event type, or any type outside the set below | 202 | No write |
 | Handled event, `customer.external_id` missing | 202 | Warning log, no write (checkout created outside this flow) |
 | Handled event with `external_id` | 202 | `$set` subscription fields on that `user_id` |
+| Handled event, `product_id` is not Basic or Pro | 202 | Warning log; `$set` status and Polar ids; `plan` omitted unless canceled/revoked (`null`) |
 
 Handled types: `subscription.created`, `subscription.updated`,
 `subscription.active`, `subscription.canceled`, `subscription.revoked`.
 
-`product_id == POLAR_PRODUCT_ID_BASIC` stores `plan: "basic"`; any other
-product id stores `plan: "pro"`. Polar status mapping:
+`product_id` maps only when it equals `POLAR_PRODUCT_ID_BASIC` (`plan: "basic"`)
+or `POLAR_PRODUCT_ID_PRO` (`plan: "pro"`). Any other id, including a missing
+id, is logged and omitted from the `$set` (the stored plan is left unchanged).
+Canceled and revoked events still write `plan: null`. Polar status mapping:
 
 | Polar status | Stored `subscription_status` | `plan` field |
 |---|---|---|
-| `trialing`, `active`, `canceled`, `revoked`, `past_due` | same | cleared (`null`) for `canceled` and `revoked`; otherwise the product's plan |
+| `trialing`, `active`, `canceled`, `revoked`, `past_due` | same | cleared (`null`) for `canceled` and `revoked`; otherwise `basic`/`pro` when `product_id` matches; unknown id leaves `plan` unchanged |
 | `unpaid`, `incomplete_expired` | `revoked` | cleared |
 | `paused`, `incomplete` | `past_due` | kept |
 | event type `subscription.revoked` | `revoked` (wins over the payload status) | cleared |
@@ -913,7 +916,7 @@ in-memory fakes; no Mongo/Chroma/network needed):
 | `test_company_models.py` | Widget-config caps (blank / >120 chars / >4 items) and trim |
 | `test_widget_config_routes.py` | Public GET 200/404; PATCH without token is 401 |
 | `test_auth_service.py` / `test_auth_routes.py` | Register, duplicate 409, short password 422, Google 503/307, `/me` limits |
-| `test_billing_service.py` / `test_billing_routes.py` | Checkout payload, portal 404, webhook signature 403, unrelated event 202, status map |
+| `test_billing_service.py` / `test_billing_routes.py` | Checkout payload, portal 404, webhook signature 403, unrelated event 202, status map, unknown Polar product id skips the plan write |
 | `test_company_ownership.py` | 402 without a plan, Basic/Pro caps, URL-ingest 403, cross-user 404, superadmin, owner backfill |
 
 ```bash

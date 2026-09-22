@@ -175,11 +175,11 @@ control to advance).
 |---|---|---|
 | Sign up | **No account yet? Sign up**, valid email, password with upper, lower, number, symbol | **Choose your plan** (no companies yet) |
 | Google | **Continue with Google** | Same as sign-up or sign-in, depending on whether that account already has a plan. `#error=…` stays on the auth screen |
-| Subscribe | **Subscribe** on Basic or Pro, sandbox card `4242 4242 4242 4242` | Polling screen, then the panel. Header pill like `basic · trialing` |
-| Billing again | Header **Billing** | Plan cards. **Back to panel** returns. **Manage subscription** opens the Polar portal in a new tab |
-| Superadmin login | Email + password from `.env` | Panel immediately. No pill, no **Billing**, no create/URL gate |
-| Stay signed in | Refresh the tab | Still signed in (`localStorage` JWT). A user without an active plan sees billing again |
-| Sign out | Header button, or **Sign out** on the billing screen | Back to the auth screen |
+| Subscribe | **Subscribe** on Basic or Pro, sandbox card `4242 4242 4242 4242` | Polling in the main pane (sidebar stays), then the panel. Sidebar pill like `basic · trialing` |
+| Billing again | Sidebar **Billing** | Plan cards in the main pane, sidebar stays. **Back to panel** returns. **Manage subscription** opens the Polar portal in a new tab |
+| Superadmin login | Email + password from `.env` | Panel immediately. No pill, no **Billing**, no create/URL gate. Sidebar still shows email and **Sign out** |
+| Stay signed in | Refresh the tab | Still signed in (`localStorage` JWT). A user without an active plan sees billing cards beside the sidebar |
+| Sign out | Sidebar **Sign out** | Back to the auth screen |
 | Create company | Name, 1–100 characters, while under the plan cap | Appears in the sidebar, auto-selected, `cmp_…` id |
 | Plan cap | Basic with 1 company, or Pro with 10 | Create form becomes **Plan limit reached**. Basic also shows **Upgrade plan** |
 | Upload docs | Drop or browse `.pdf` / `.md` / `.txt` / `.html` | Status `uploading` → `ready` |

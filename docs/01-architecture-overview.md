@@ -132,7 +132,7 @@ env vars and `.env` for local non-Docker runs). Template: `.env.example`.
 | `POLAR_ACCESS_TOKEN` | `""` — empty → billing 503   | `${POLAR_ACCESS_TOKEN:-}`    | backend Polar API |
 | `POLAR_WEBHOOK_SECRET` | `""`                         | `${POLAR_WEBHOOK_SECRET:-}`  | webhook signature check |
 | `POLAR_ENVIRONMENT` | `sandbox`                     | `${POLAR_ENVIRONMENT:-sandbox}` | `sandbox` or production server |
-| `POLAR_PRODUCT_ID_BASIC` / `POLAR_PRODUCT_ID_PRO` | `""` | from `.env` | Checkout products; webhook maps the Basic id, everything else to Pro |
+| `POLAR_PRODUCT_ID_BASIC` / `POLAR_PRODUCT_ID_PRO` | `""` | from `.env` | Checkout products; webhook maps each id to `basic` or `pro` and skips the plan write if neither matches |
 
 Admin build-time variables (Vite, baked into the bundle via Docker build args in compose):
 

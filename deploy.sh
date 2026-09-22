@@ -106,14 +106,22 @@ sleep 10
 
 echo ""
 echo -e "${YELLOW}Checking service health...${NC}"
-check_service_health "Backend" "http://localhost:8000/health" || true
-check_service_health "Admin" "http://localhost:3001/" || true
-check_service_health "Widget CDN" "http://localhost:1337/embed/v1/loader.js" || true
-check_service_health "Demo" "http://localhost:3002/" || true
+failed=0
+check_service_health "Backend" "http://localhost:8000/health" || failed=1
+check_service_health "Admin" "http://localhost:3001/" || failed=1
+check_service_health "Widget CDN" "http://localhost:1337/embed/v1/loader.js" || failed=1
+check_service_health "Demo" "http://localhost:3002/" || failed=1
 
 echo ""
 echo -e "${GREEN}Running containers:${NC}"
 "${COMPOSE[@]}" ps
+
+if [ "$failed" -ne 0 ]; then
+  echo ""
+  echo -e "${RED}Deployment failed: one or more health checks did not pass.${NC}"
+  echo "Backend /health must return 200. Check: docker compose --env-file .env -f $COMPOSE_FILE logs"
+  exit 1
+fi
 
 echo ""
 echo -e "${GREEN}Deployment complete${NC}"

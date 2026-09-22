@@ -59,20 +59,20 @@ export const CheckoutPending = () => {
 
 	if (timedOut) {
 		return (
-			<main className={styles.screen} data-testid="checkout-pending">
+			<section className={styles.pendingScreen} data-testid="checkout-pending">
 				<p className={styles.timeout}>
 					Payment received — your plan is being activated. Refresh in a minute.
 				</p>
-			</main>
+			</section>
 		);
 	}
 
 	return (
-		<main className={styles.screen} data-testid="checkout-pending">
+		<section className={styles.pendingScreen} data-testid="checkout-pending">
 			<div className={styles.pending}>
 				<Spinner />
 				<p>Finalizing your subscription…</p>
 			</div>
-		</main>
+		</section>
 	);
 };

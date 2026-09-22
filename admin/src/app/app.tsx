@@ -6,8 +6,7 @@ import {
 	selectNeedsBilling,
 	useAdminStore,
 } from '@/shared/store/admin-store';
-import { Button, ThemeToggle } from '@/shared/ui';
-import { ApiStatusBadge } from '@/widgets/api-status';
+import { ThemeToggle } from '@/shared/ui';
 import { AuthScreen } from '@/widgets/auth-screen';
 import { BillingScreen, CheckoutPending } from '@/widgets/billing';
 import { CompaniesSidebar } from '@/widgets/companies-sidebar';
@@ -18,7 +17,6 @@ import styles from './app.module.css';
 export const App = () => {
 	const {
 		isAuthenticated,
-		me,
 		selectedCompanyId,
 		needsBilling,
 		showBilling,
@@ -26,7 +24,6 @@ export const App = () => {
 	} = useAdminStore(
 		useShallow((s) => ({
 			isAuthenticated: s.isAuthenticated,
-			me: s.me,
 			selectedCompanyId: s.selectedCompanyId,
 			needsBilling: selectNeedsBilling(s),
 			showBilling: s.showBilling,
@@ -67,42 +64,23 @@ export const App = () => {
 		);
 	}
 
-	if (needsBilling || showBilling || checkoutPending) {
-		return checkoutPending ? <CheckoutPending /> : <BillingScreen />;
-	}
+	const showPlans = needsBilling || showBilling;
 
 	return (
 		<div className={styles.layout}>
 			<CompaniesSidebar />
 			<div className={styles.workspace}>
-				<header className={styles.header}>
-					<h1 className={styles.visuallyHidden}>Hint Admin</h1>
-					<div className={styles.headerActions}>
-						<ApiStatusBadge />
-						{me?.role !== 'superadmin' && (
-							<>
-								<span className={styles.planPill} data-testid="plan-pill">
-									{me?.plan} · {me?.subscription_status}
-								</span>
-								<Button
-									variant="neutral"
-									onClick={() =>
-										useAdminStore.setState({ showBilling: true })
-									}
-								>
-									Billing
-								</Button>
-							</>
-						)}
-						<span className={styles.adminEmail}>{me?.email}</span>
-						<ThemeToggle />
-						<Button variant="neutral" onClick={logout}>
-							Sign out
-						</Button>
-					</div>
-				</header>
+				<h1 className={styles.visuallyHidden}>Hint Admin</h1>
 				<main className={styles.main}>
-					{selectedCompanyId ? <CompanyDetail /> : <ProductOverview />}
+					{checkoutPending ? (
+						<CheckoutPending />
+					) : showPlans ? (
+						<BillingScreen />
+					) : selectedCompanyId ? (
+						<CompanyDetail />
+					) : (
+						<ProductOverview />
+					)}
 				</main>
 			</div>
 		</div>

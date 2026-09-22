@@ -3,7 +3,7 @@ import { createCheckout, getPortalUrl } from '@/shared/api';
 import type { Plan, SubscriptionStatus } from '@/shared/api';
 import { toErrorMessage } from '@/shared/lib/error-message';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Button, ThemeToggle, Wordmark } from '@/shared/ui';
+import { Button } from '@/shared/ui';
 import styles from './billing.module.css';
 import { PlanCard } from './plan-card';
 
@@ -36,7 +36,6 @@ const PLANS: readonly {
 
 export const BillingScreen = () => {
 	const me = useAdminStore((s) => s.me);
-	const logout = useAdminStore((s) => s.logout);
 	const [loadingPlan, setLoadingPlan] = useState<Plan | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -68,12 +67,8 @@ export const BillingScreen = () => {
 		ACTIVE_STATUSES.includes(me.subscription_status);
 
 	return (
-		<main className={styles.screen} data-testid="billing-screen">
-			<div className={styles.theme}>
-				<ThemeToggle />
-			</div>
+		<section className={styles.screen} data-testid="billing-screen">
 			<div className={styles.panel}>
-				<Wordmark label="hint" />
 				<p className={styles.kicker}>Billing</p>
 				<h1>Choose your plan</h1>
 				<p className={styles.lead}>
@@ -131,13 +126,7 @@ export const BillingScreen = () => {
 						{error}
 					</p>
 				) : null}
-				<footer className={styles.footer}>
-					Signed in as {me?.email} ·{' '}
-					<button type="button" className={styles.signOut} onClick={logout}>
-						Sign out
-					</button>
-				</footer>
 			</div>
-		</main>
+		</section>
 	);
 };

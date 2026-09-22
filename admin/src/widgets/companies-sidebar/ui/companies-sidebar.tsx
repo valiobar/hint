@@ -3,9 +3,10 @@ import { CompanyListItem } from '@/entities/company';
 import { CreateCompanyForm } from '@/features/create-company';
 import {
 	selectCanCreateCompany,
+	selectNeedsBilling,
 	useAdminStore,
 } from '@/shared/store/admin-store';
-import { Button, EmptyState, Spinner, Wordmark } from '@/shared/ui';
+import { Button, EmptyState, Spinner, ThemeToggle, Wordmark } from '@/shared/ui';
 import styles from './companies-sidebar.module.css';
 
 export const CompaniesSidebar = () => {
@@ -19,9 +20,15 @@ export const CompaniesSidebar = () => {
 			})),
 		);
 	const selectCompany = useAdminStore((s) => s.selectCompany);
+	const me = useAdminStore((s) => s.me);
+	const logout = useAdminStore((s) => s.logout);
+	const billingOpen = useAdminStore(
+		(s) => s.showBilling || selectNeedsBilling(s),
+	);
 	const canCreate = useAdminStore(selectCanCreateCompany);
-	const maxCompanies = useAdminStore((s) => s.me?.limits.max_companies ?? 0);
-	const plan = useAdminStore((s) => s.me?.plan);
+	const maxCompanies = me?.limits.max_companies ?? 0;
+	const plan = me?.plan;
+	const isSuperadmin = me?.role === 'superadmin';
 
 	return (
 		<aside className={styles.sidebar} data-testid="companies-sidebar">
@@ -34,6 +41,10 @@ export const CompaniesSidebar = () => {
 				</h2>
 				{canCreate ? (
 					<CreateCompanyForm />
+				) : maxCompanies === 0 ? (
+					<p className={styles.subscribeHint} data-testid="subscribe-hint">
+						Subscribe to add a company.
+					</p>
 				) : (
 					<div className={styles.limitNotice} data-testid="company-limit-notice">
 						<p>
@@ -57,11 +68,14 @@ export const CompaniesSidebar = () => {
 						{companiesError}
 					</p>
 				)}
-				{!isLoadingCompanies && companies.length === 0 && !companiesError && (
-					<EmptyState title="No companies yet">
-						Create the first one above.
-					</EmptyState>
-				)}
+				{!isLoadingCompanies &&
+					companies.length === 0 &&
+					!companiesError &&
+					canCreate && (
+						<EmptyState title="No companies yet">
+							Create the first one above.
+						</EmptyState>
+					)}
 				<ul className={styles.list}>
 					{companies.map((company) => (
 						<li key={company.company_id}>
@@ -74,9 +88,46 @@ export const CompaniesSidebar = () => {
 					))}
 				</ul>
 			</section>
-			<p className={styles.footer}>
-				Nothing selected — overview on the right.
-			</p>
+			<footer className={styles.account} data-testid="sidebar-account">
+				<div className={styles.accountHead}>
+					<p className={styles.accountEmail}>{me?.email}</p>
+					<ThemeToggle />
+				</div>
+				{!isSuperadmin ? (
+					<p className={styles.planLine}>
+						<span
+							className={styles.planPill}
+							data-testid="plan-pill"
+							data-status={me?.subscription_status ?? 'none'}
+						>
+							{me?.plan ?? 'no plan'}
+							{me?.subscription_status
+								? ` · ${me.subscription_status.replace(/_/g, ' ')}`
+								: ''}
+						</span>
+					</p>
+				) : null}
+				<div className={styles.accountActions}>
+					{!isSuperadmin ? (
+						<Button
+							variant={billingOpen ? 'primary' : 'neutral'}
+							className={styles.accountButton}
+							onClick={() =>
+								useAdminStore.setState({ showBilling: true })
+							}
+						>
+							Billing
+						</Button>
+					) : null}
+					<Button
+						variant="ghost"
+						className={styles.accountButton}
+						onClick={logout}
+					>
+						Sign out
+					</Button>
+				</div>
+			</footer>
 		</aside>
 	);
 };

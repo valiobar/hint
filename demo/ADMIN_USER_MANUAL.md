@@ -114,10 +114,12 @@ The password field is cleared after every attempt (success or failure).
 | Two-pane panel | Superadmin, or a user whose plan is `active` or `trialing` |
 | **Choose your plan** | A user with no plan, or `canceled` / `revoked` / `past_due` |
 
-On the panel, the header shows your email and **Sign out**. A non-superadmin
-header also shows a plan line (`basic · trialing`) and a **Billing** button.
-The companies list loads on the left. The token is stored in the browser
-(`localStorage`) so a refresh stays signed in.
+On the panel, the sidebar bottom shows your email and **Sign out**. A
+non-superadmin account also shows a plan line (`basic · trialing`) and a
+**Billing** button there. **Billing** keeps the sidebar and opens the plan
+cards in the main pane. The companies list loads above the account block.
+The token is stored in the browser (`localStorage`) so a refresh stays
+signed in.
 
 ### 3.2 Sign up
 
@@ -178,23 +180,20 @@ A `user` who is not `active` or `trialing` sees this screen instead of the
 panel. A subscribed user can also open it from the header **Billing** button.
 
 ```
-┌─────────────────────────────────────────────┐
-│  hint                          Billing      │
-│  Choose your plan                           │
-│  You need an active subscription…           │
-│                                             │
-│  Current plan  basic   [trialing]           │
-│                                             │
-│  ┌ Basic ─────────┐  ┌ Pro ────────────┐   │
-│  │ 1 company      │  │ Up to 10        │   │
-│  │ File ingestion │  │ Everything in   │   │
-│  │ Chat + hints   │  │ Basic           │   │
-│  │ [Subscribe]    │  │ URL ingestion   │   │
-│  └────────────────┘  │ [Subscribe]     │   │
-│                      └─────────────────┘   │
-│  [Back to panel]  [Manage subscription]    │
-│  Signed in as you@example.com · Sign out   │
-└─────────────────────────────────────────────┘
+┌──────────────────┬──────────────────────────────────┐
+│  hint            │  Billing                         │
+│  Companies       │  Choose your plan               │
+│                  │  You need an active subscription…│
+│                  │                                  │
+│                  │  Current plan  basic  [trialing] │
+│                  │  ┌ Basic ──┐  ┌ Pro ─────────┐  │
+│                  │  │[Subscribe]│  │[Subscribe]   │  │
+│                  │  └─────────┘  └──────────────┘  │
+│ you@example.com  │  [Back to panel] [Manage sub…]  │
+│ basic · trialing │                                  │
+│ [Billing]        │                                  │
+│ [Sign out]       │                                  │
+└──────────────────┴──────────────────────────────────┘
 ```
 
 | Control | When it shows | What it does |
@@ -202,9 +201,9 @@ panel. A subscribed user can also open it from the header **Billing** button.
 | **Subscribe** on a card | That card is not your current `active` / `trialing` plan | `POST /api/v1/billing/checkout` with `{"plan":"basic"}` or `{"plan":"pro"}`, then the browser goes to the Polar checkout URL |
 | **Current plan** | The card matches a plan that is already `active` or `trialing` | Button stays disabled |
 | **Current** badge + status pill | You already have a `plan` | Shows `basic` or `pro`, and `trialing` / `active` / `canceled` / `revoked` / `past due` |
-| **Back to panel** | Status is `active` or `trialing` (you opened billing from the header, or you are still inside the trial) | Returns to the company list. Hidden when the plan does not grant access |
+| **Back to panel** | Status is `active` or `trialing` (you opened billing from the sidebar, or you are still inside the trial) | Returns the main pane to the company view. The sidebar stays. Hidden when the plan does not grant access |
 | **Manage subscription** | You already have a `plan` on the account | Opens the Polar customer portal in a new tab (`GET /api/v1/billing/portal`) |
-| **Sign out** | Always | Clears the session and returns to the auth screen |
+| **Sign out** | Always, in the sidebar account block | Clears the session and returns to the auth screen |
 
 **Subscribe** reads **Redirecting…** while the checkout URL is loading.
 Closing the Polar tab without paying leaves you on the plan cards the next
@@ -235,7 +234,7 @@ is `4242 4242 4242 4242` (any future expiry, any CVC).
 | Companies you can create | 1 | 10 | Effectively unlimited (limit 10000) |
 | File upload (`.pdf` `.md` `.txt` `.html`) | Yes | Yes | Yes |
 | Paste support-page URLs | No — company detail shows **URL ingestion is a Pro feature** and **Upgrade** | Yes | Yes |
-| Header plan line and **Billing** | Yes (`basic · trialing`) | Yes | Hidden |
+| Sidebar plan line and **Billing** | Yes (`basic · trialing`) | Yes | Hidden. Email and **Sign out** stay |
 | Sees other people's companies | No — list is only yours | No | Yes — every company |
 
 Downgrading (Pro → Basic, or cancel) keeps companies you already created.
@@ -252,9 +251,7 @@ them. The API still answers **402** / **403** if something calls it directly.
 ## 4. Screen layout
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ [API badge]  basic · trialing  [Billing]  you@…  [Sign out]  │
-├────────────────────┬─────────────────────────────────────────┤
+┌────────────────────┬─────────────────────────────────────────┤
 │  [Company name   ] │  Company name                           │
 │  [Create company ] │  cmp_1a2b3c4d                           │
 │                    │                                         │
@@ -262,11 +259,11 @@ them. The API still answers **402** / **403** if something calls it directly.
 │  cmp_1a2b3c4d      │  <script …>                    [Copy]   │
 │                    │                                         │
 │                    │  Starter questions                      │
-│                    │  [How do I …                    ] × 4   │
-│                    │                    [Save questions]     │
-│                    │                                         │
-│  Contoso           │  Documents                              │
-│  cmp_9f8e7d6c      │  [ drop / browse files ]                │
+│  you@example.com ☽ │  [How do I …                    ] × 4   │
+│  basic · trialing  │                    [Save questions]     │
+│  [Billing]         │                                         │
+│  [Sign out]        │  Documents                              │
+│                    │  [ drop / browse files ]                │
 │                    │  user-manual.md  12 KB · 8 chunks  ready│
 │                    │                                 [Delete]│
 └────────────────────┴─────────────────────────────────────────┘
@@ -274,31 +271,20 @@ them. The API still answers **402** / **403** if something calls it directly.
 
 | Region | What it shows |
 |---|---|
-| Header | API health badge, plan line + **Billing** (hidden for superadmin), signed-in email, theme toggle, **Sign out**. The “Hint Admin” title is visually hidden |
-| Left sidebar | Create-company form, or a plan-limit notice, plus the company list |
-| Right pane | Empty placeholder until you select or create a company; then name, id, snippet, starter questions, dropzone, document list |
+| Left sidebar | Create-company form, or a plan-limit notice, plus the company list. The bottom account block shows email, an icon theme button, plan line + **Billing** (hidden for superadmin), and **Sign out** |
+| Right pane | Plan cards while billing is open; otherwise the product overview until you select or create a company, then name, id, snippet, starter questions, dropzone, document list |
 
 After a **page reload**, companies come back but **nothing is selected**. Click
 the company again. That is expected — selection is not saved.
 
 ---
 
-## 5. API status badge (header)
+## 5. Theme
 
-The badge calls `GET https://api.hint.codebar.cc/health` once when the panel
-loads (no login token).
-
-| Badge text | Meaning |
-|---|---|
-| `checking…` | Request in flight |
-| `API ok · mongo=ok · chroma=ok` | Backend + Mongo + Chroma healthy |
-| `API degraded · mongo=… · chroma=…` | Backend answered but a store ping failed |
-| `API unreachable` | Could not reach https://api.hint.codebar.cc |
-
-A red / unreachable badge usually means the backend container is down. Login
-and uploads will fail until it is back.
-
-The badge does **not** auto-refresh. Reload the admin page to check again.
+The sidebar account block has an icon button beside the email. In light mode
+it is a moon (**Switch to dark theme**). In dark mode it is a sun (**Switch
+to light theme**). The sign-in screen uses the same icon in the top-right
+corner. The choice is stored in the browser (`hint.admin.theme`).
 
 ---
 
@@ -493,7 +479,7 @@ One failed file does **not** roll back the rest of the batch.
 | Message | Cause | Fix |
 |---|---|---|
 | `OPENAI_API_KEY is not configured; set it in .env and restart` | 503 — no key | Set the key, restart backend, upload again |
-| Network / unreachable | Backend down | Check the health badge and https://api.hint.codebar.cc/health |
+| Network / unreachable | Backend down | Check https://api.hint.codebar.cc/health, then retry |
 | Whole request rejected (413) | A file over 10 MB slipped past the client | Remove it and retry |
 
 ---
@@ -633,7 +619,7 @@ under the empty-state sentence. Click one — that question is sent.
 |---|---|---|
 | `Each question must be at most 120 characters` | A field is too long (client check) | Shorten it and save again |
 | Backend `detail` under the form (422) | More than 4 items, a blank entry, or a line over 120 characters | Fix the fields; the last good save is still stored |
-| Network / unreachable | Backend down | Check the health badge; retry Save |
+| Network / unreachable | Backend down | Retry Save once the API is back |
 
 ---
 
@@ -645,7 +631,7 @@ under the empty-state sentence. Click one — that question is sent.
    (or **Continue with Google**).
 2. On **Choose your plan**, subscribe to Basic or Pro and finish Polar
    checkout. Wait until the panel appears (see [§3a](#3a-billing)).
-3. Confirm the header badge is `API ok` and the plan line shows your plan.
+3. Confirm the sidebar plan line shows your plan.
 
 **Superadmin shortcut** — sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 and skip step 2. There is no plan line.
@@ -673,7 +659,7 @@ If answers are empty or generic, the doc is not `ready`, the wrong
 
 | Action | Result |
 |---|---|
-| **Sign out** (panel header or billing footer) | Token and email cleared; next visit is the auth screen. Billing flags are cleared too |
+| **Sign out** (sidebar account block) | Token and email cleared; next visit is the auth screen. Billing flags are cleared too |
 | Reload while signed in | Session restored via `GET /auth/me`; companies reload; **selection is lost**. A user without an active plan sees billing again |
 | Token expired / `JWT_SECRET` changed | Next API call 401 → login screen |
 | Private-mode Safari (or `localStorage` blocked) | Login can work for this tab only; reload returns to login |

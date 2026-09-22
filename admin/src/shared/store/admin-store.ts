@@ -26,14 +26,14 @@ export interface UploadingFile {
 
 interface AdminState {
 	me: Me | null;
-	/** Header label. Always `me.email` while a session is loaded. */
+	/** Sidebar account label. Always `me.email` while a session is loaded. */
 	adminEmail: string | null;
 	isAuthenticated: boolean;
 	isAuthenticating: boolean;
 	authError: string | null;
 	/** Polar returned `?checkout=success`; checkout polling clears this. */
 	checkoutPending: boolean;
-	/** Header "Billing" opens the plan screen for a user who already has access. */
+	/** Sidebar "Billing" opens the plan cards in the main pane. */
 	showBilling: boolean;
 	companies: Company[];
 	isLoadingCompanies: boolean;

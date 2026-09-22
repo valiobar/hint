@@ -9,42 +9,7 @@
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
-}
-
-.header {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: var(--space-3);
-	flex-wrap: wrap;
-	padding: 1rem 1.5rem 0;
-}
-
-.headerActions {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	flex-wrap: wrap;
-}
-
-.adminEmail {
-	color: var(--color-text);
-	font-size: 0.88rem;
-}
-
-.planPill {
-	display: inline-flex;
-	align-items: center;
-	padding: 0.2rem 0.55rem;
-	border: 1px solid rgb(23 178 106 / 0.28);
-	border-radius: var(--radius-pill);
-	background: var(--color-ok-soft);
-	color: var(--color-ok);
-	font-size: 0.7rem;
-	font-weight: 700;
-	letter-spacing: 0.02em;
-	line-height: 1.2;
-	text-transform: lowercase;
+	min-height: 100vh;
 }
 
 .visuallyHidden {
@@ -76,6 +41,7 @@
 
 .main {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
 	gap: var(--space-4);
 	min-width: 0;

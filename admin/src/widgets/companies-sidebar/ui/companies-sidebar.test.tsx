@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { Company, Me } from '@/shared/api';
 import { useAdminStore } from '@/shared/store/admin-store';
 import { CompaniesSidebar } from './companies-sidebar';
@@ -67,4 +67,69 @@ it('keeps the create form under the limit and hides upgrade on Pro', () => {
 	expect(
 		screen.queryByRole('button', { name: 'Upgrade plan' }),
 	).not.toBeInTheDocument();
+});
+
+it('shows the signed-in email and opens billing from the account block', () => {
+	const logout = vi.fn();
+	useAdminStore.setState({
+		me: me(),
+		companies: [],
+		isLoadingCompanies: false,
+		companiesError: null,
+		showBilling: false,
+		logout,
+	});
+
+	render(<CompaniesSidebar />);
+
+	expect(screen.getByTestId('sidebar-account')).toHaveTextContent(
+		'ada@example.com',
+	);
+	expect(
+		screen.getByRole('button', { name: /Switch to (dark|light) theme/ }),
+	).toBeInTheDocument();
+	expect(screen.getByTestId('plan-pill')).toHaveTextContent('basic · active');
+	fireEvent.click(screen.getByRole('button', { name: 'Billing' }));
+	expect(useAdminStore.getState().showBilling).toBe(true);
+
+	fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+	expect(logout).toHaveBeenCalled();
+});
+
+it('hides billing for a superadmin and asks a new user to subscribe', () => {
+	useAdminStore.setState({
+		me: me({
+			role: 'superadmin',
+			plan: null,
+			subscription_status: null,
+			limits: { max_companies: 10000, url_ingestion: true },
+		}),
+		companies: [],
+		isLoadingCompanies: false,
+		companiesError: null,
+	});
+
+	const { unmount } = render(<CompaniesSidebar />);
+	expect(screen.getByTestId('sidebar-account')).toHaveTextContent(
+		'ada@example.com',
+	);
+	expect(screen.queryByTestId('plan-pill')).not.toBeInTheDocument();
+	expect(
+		screen.queryByRole('button', { name: 'Billing' }),
+	).not.toBeInTheDocument();
+	unmount();
+
+	useAdminStore.setState({
+		me: me({
+			plan: null,
+			subscription_status: null,
+			limits: { max_companies: 0, url_ingestion: false },
+		}),
+		companies: [],
+	});
+	render(<CompaniesSidebar />);
+	expect(screen.getByTestId('subscribe-hint')).toHaveTextContent(
+		'Subscribe to add a company.',
+	);
+	expect(screen.getByTestId('plan-pill')).toHaveTextContent('no plan');
 });

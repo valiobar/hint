@@ -25,15 +25,13 @@ const me = (overrides: Partial<Me> = {}): Me => ({
 	...overrides,
 });
 
-it('starts checkout, shows the portal for a current plan, and signs out', async () => {
-	const logout = vi.fn();
+it('starts checkout and opens the portal for a current plan', async () => {
 	useAdminStore.setState({
 		me: me({
 			plan: 'basic',
 			subscription_status: 'trialing',
 			limits: { max_companies: 1, url_ingestion: false },
 		}),
-		logout,
 	});
 	createCheckout.mockResolvedValue({
 		checkout_url: 'https://polar.sh/checkout/pro',
@@ -68,9 +66,6 @@ it('starts checkout, shows the portal for a current plan, and signs out', async 
 		'_blank',
 		'noopener',
 	);
-
-	fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-	expect(logout).toHaveBeenCalled();
 
 	open.mockRestore();
 	vi.unstubAllGlobals();

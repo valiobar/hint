@@ -50,6 +50,18 @@ class BillingService:
             else self.settings.polar_product_id_pro
         )
 
+    def _plan_for_product(self, product_id: object) -> str | None:
+        if not product_id:
+            return None
+        pid = str(product_id)
+        basic = self.settings.polar_product_id_basic
+        pro = self.settings.polar_product_id_pro
+        if basic and pid == basic:
+            return "basic"
+        if pro and pid == pro:
+            return "pro"
+        return None
+
     async def create_checkout(self, user: UserInDB, plan: str) -> str:
         checkout = await self.client.checkouts.create_async(
             request={
@@ -88,20 +100,25 @@ class BillingService:
             )
             return
         product_id = getattr(sub, "product_id", None)
-        plan = (
-            "basic" if product_id == self.settings.polar_product_id_basic else "pro"
-        )
+        plan = self._plan_for_product(product_id)
         status = _subscription_status(getattr(sub, "status", None), event_type)
-        await self.user_repo.update_subscription(
-            user_id,
-            {
-                "plan": None if status in _CLEARS_PLAN else plan,
-                "subscription_status": status,
-                "polar_customer_id": getattr(sub, "customer_id", None),
-                "polar_subscription_id": getattr(sub, "id", None),
-                "current_period_end": getattr(sub, "current_period_end", None),
-            },
-        )
+        fields: dict[str, object] = {
+            "subscription_status": status,
+            "polar_customer_id": getattr(sub, "customer_id", None),
+            "polar_subscription_id": getattr(sub, "id", None),
+            "current_period_end": getattr(sub, "current_period_end", None),
+        }
+        if status in _CLEARS_PLAN:
+            fields["plan"] = None
+        elif plan is not None:
+            fields["plan"] = plan
+        else:
+            logger.warning(
+                "Polar subscription %s has unknown product_id %s; skipping plan write",
+                getattr(sub, "id", "?"),
+                product_id,
+            )
+        await self.user_repo.update_subscription(user_id, fields)
 
 
 def _event_type(event: object) -> str:

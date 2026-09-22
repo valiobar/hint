@@ -2,9 +2,13 @@
 	display: flex;
 	flex-direction: column;
 	gap: 1.75rem;
-	padding: 1.5rem 1.35rem;
+	position: sticky;
+	top: 0;
+	height: 100vh;
+	padding: 1.5rem 1.35rem 1.15rem;
 	background: var(--color-surface);
 	border-right: 1px solid var(--color-border);
+	overflow: hidden;
 }
 
 .brand {
@@ -14,8 +18,11 @@
 
 .section {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
 	gap: 0.75rem;
+	min-height: 0;
+	overflow: auto;
 }
 
 .heading {
@@ -47,23 +54,95 @@
 	gap: 0.65rem;
 }
 
-.limitNotice p {
+.limitNotice p,
+.subscribeHint {
 	margin: 0;
 	color: var(--color-text-muted);
 	font-size: 0.85rem;
 	line-height: 1.45;
 }
 
-.footer {
+.account {
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+	margin-top: auto;
+	padding-top: 1rem;
+	border-top: 1px solid var(--color-border);
+}
+
+.accountHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.accountEmail {
 	margin: 0;
+	min-width: 0;
+	color: var(--color-text);
+	font-size: 0.88rem;
+	font-weight: 650;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.planLine {
+	margin: 0;
+}
+
+.planPill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.2rem 0.55rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-pill);
+	background: var(--color-bg);
 	color: var(--color-text-muted);
-	font-size: 0.75rem;
-	line-height: 1.45;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	line-height: 1.2;
+	text-transform: lowercase;
+}
+
+.planPill[data-status='active'],
+.planPill[data-status='trialing'] {
+	border-color: rgb(23 178 106 / 0.28);
+	background: var(--color-ok-soft);
+	color: var(--color-ok);
+}
+
+.planPill[data-status='past_due'],
+.planPill[data-status='canceled'] {
+	border-color: rgb(245 165 36 / 0.28);
+	background: var(--color-warn-soft);
+	color: var(--color-warn);
+}
+
+.planPill[data-status='revoked'] {
+	border-color: rgb(248 113 113 / 0.28);
+	background: var(--color-error-soft);
+	color: var(--color-error);
+}
+
+.accountActions {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+
+.accountButton {
+	width: 100%;
 }
 
 @media (max-width: 48rem) {
 	.sidebar {
+		position: static;
 		width: auto;
+		height: auto;
+		overflow: visible;
 		border-right: 0;
 		border-bottom: 1px solid var(--color-border);
 	}

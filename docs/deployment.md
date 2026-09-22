@@ -64,7 +64,19 @@ SSH in with your own key (`~/.ssh/digitalocean`), not a key from this repo.
    #   ADMIN_EMAIL         — default admin@hint.local
    #   OPENAI_API_KEY      — required for upload / retrieve / chat / hint
    #   IMAGE_TAG=latest    — CI overwrites this with the git SHA
+   #
+   # Optional — forwarded into the backend container. Empty keeps the code defaults.
+   #   ADMIN_UI_URL=http://<droplet>:3001
+   #   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+   #   GOOGLE_REDIRECT_URI=http://<droplet>:8000/api/v1/auth/google/callback
+   #   POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET
+   #   POLAR_PRODUCT_ID_BASIC, POLAR_PRODUCT_ID_PRO
+   #   POLAR_ENVIRONMENT=sandbox   # set production only after a signed sandbox webhook
    ```
+
+   Production compose interpolates those Google and Polar keys from `.env` into the backend. `deploy.sh` does not require them. Empty values keep the code defaults: Google routes return 503, checkout / portal / `POST /api/v1/webhooks/polar` return 503, `POLAR_ENVIRONMENT` stays `sandbox`, and checkout plus Google send the browser back to `http://localhost:3001`.
+
+   For Google and Polar on this droplet, set `ADMIN_UI_URL` to the public Admin origin (`http://<droplet>:3001`) and `GOOGLE_REDIRECT_URI` to `{public API origin}/api/v1/auth/google/callback` (the API is published on port 8000). Register the Polar webhook at `{public API origin}/api/v1/webhooks/polar`. Restart the backend after editing `.env` (`docker compose --env-file .env -f infrastructure/docker-compose.yml up -d`).
 
 4. Add the **public** half of the deploy key to `~/.ssh/authorized_keys` for `DEPLOY_USER` (often `root`). The matching **private** key is a GitHub secret only — never commit it.
 
@@ -99,9 +111,10 @@ The application `.env` stays on the server. CI only updates `IMAGE_TAG`.
 
 Push to `main` or run the **Deploy** workflow (`workflow_dispatch`).
 
-1. Matrix job builds/pushes `hint-backend`, `hint-admin`, `hint-widget`, `hint-demo` (`:sha` and `:latest`).
-2. SSH job writes `IMAGE_TAG=<sha>` into the droplet `.env` and runs `bash deploy.sh`.
-3. `deploy.sh` validates required env, `compose pull`, `compose up -d` (no build), then curls Hint health URLs.
+1. `test` job runs `pytest` in `backend/` and `pnpm test` in `admin/` and `widget/`. Build and deploy do not start if this job is red.
+2. Matrix job builds/pushes `hint-backend`, `hint-admin`, `hint-widget`, `hint-demo` (`:sha` and `:latest`).
+3. SSH job writes `IMAGE_TAG=<sha>` into the droplet `.env` and runs `bash deploy.sh`.
+4. `deploy.sh` validates required env, `compose pull`, `compose up -d` (no build), then curls Hint health URLs. The script exits 1 if backend `/health` (or admin / widget CDN / demo) is not 200, so the GitHub Actions job is red.
 
 After it is up:
 
@@ -143,6 +156,22 @@ IMAGE_TAG=<sha-or-latest> bash deploy.sh
 | `OPENAI_API_KEY` | Upload / retrieve / chat / hint return 503 without it |
 
 See `.env.example` for optional `LLM_*`, `EMBEDDING_MODEL`, cache, and `ADMIN_EMAIL`.
+
+### Optional Google and Polar keys (forwarded; not validated)
+
+`infrastructure/docker-compose.yml` passes these from `.env` into the backend. `deploy.sh` still validates only the three required variables above. Leave them empty to boot; fill them when self-serve signup and checkout should work.
+
+| Variable | Default when unset | Why |
+|---|---|---|
+| `ADMIN_UI_URL` | `http://localhost:3001` | Google callback and Polar checkout `success_url`. Set to this droplet’s Admin origin (`http://<host>:3001`) or checkout/Google return to localhost |
+| `GOOGLE_CLIENT_ID` | `""` | Empty → Google routes return 503 |
+| `GOOGLE_CLIENT_SECRET` | `""` | OAuth code exchange |
+| `GOOGLE_REDIRECT_URI` | `http://localhost:8000/api/v1/auth/google/callback` | Must match the Google Cloud client. On this droplet: `http://<host>:8000/api/v1/auth/google/callback` |
+| `POLAR_ACCESS_TOKEN` | `""` | Empty → checkout, portal, and `POST /api/v1/webhooks/polar` return 503 |
+| `POLAR_WEBHOOK_SECRET` | `""` | Polar webhook signature. Register the endpoint at `{public API origin}/api/v1/webhooks/polar` |
+| `POLAR_ENVIRONMENT` | `sandbox` | `sandbox` or `production`. Stay on sandbox until a signed sandbox webhook is observed |
+| `POLAR_PRODUCT_ID_BASIC` | `""` | Checkout product for Basic |
+| `POLAR_PRODUCT_ID_PRO` | `""` | Checkout product for Pro |
 
 ## Useful commands (on the droplet)
 

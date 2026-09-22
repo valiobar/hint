@@ -9,8 +9,9 @@
 
 The admin SPA (`admin/`, host port **3001**) is the operator UI for the knowledge
 base. A visitor signs in, signs up, or continues with Google. A `user` without
-an `active` or `trialing` plan sees the billing screen before the panel. The
-seeded superadmin skips billing and plan limits. From the panel they create
+an `active` or `trialing` plan sees the plan cards in the main pane, with the
+company sidebar still on the left. The seeded superadmin skips billing and plan
+limits. From the panel they create
 companies, upload product docs or (on Pro) paste support-page URLs, watch
 per-document ingestion status, delete documents, and copy the embed snippet.
 
@@ -31,8 +32,7 @@ admin/src/
 │   ├── billing/                     # plan cards, portal, checkout polling
 │   ├── companies-sidebar/           # list + create form, or plan-limit notice
 │   ├── company-detail/              # snippet + questions + upload + URL or Pro hint
-│   ├── product-overview/            # unselected-company product + feature cards
-│   └── api-status/                  # GET /health badge (public, no token)
+│   └── product-overview/            # unselected-company product + feature cards
 ├── features/
 │   ├── login/                       # Zod schema + login form
 │   ├── register/                    # Zod schema + signup form
@@ -64,12 +64,12 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | Field | Type | Notes |
 |---|---|---|
 | `me` | `Me \| null` | `GET /auth/me`: `email`, `role`, `plan`, `subscription_status`, `limits` |
-| `adminEmail` | `string \| null` | Header label. Always `me.email` while a session is loaded |
+| `adminEmail` | `string \| null` | Sidebar account label. Always `me.email` while a session is loaded |
 | `isAuthenticated` | `boolean` | Auth gate in `app.tsx` |
 | `isAuthenticating` | `boolean` | Login / signup button pending label |
 | `authError` | `string \| null` | Backend `detail`, network message, or Google fragment error |
 | `checkoutPending` | `boolean` | Set when the URL is `?checkout=success`. Cleared when polling sees `active` / `trialing`, and on `logout` |
-| `showBilling` | `boolean` | Header **Billing**, sidebar **Upgrade plan**, and the URL **Upgrade** button set this `true`. **Back to panel** sets it `false`. Default `false`; cleared on `logout` |
+| `showBilling` | `boolean` | Sidebar **Billing**, sidebar **Upgrade plan**, and the URL **Upgrade** button set this `true`. **Back to panel** sets it `false`. Default `false`; cleared on `logout` |
 | `companies` | `Company[]` | Newest-first after create (prepend) |
 | `isLoadingCompanies` | `boolean` | Sidebar spinner |
 | `companiesError` | `string \| null` | List/load failures |
@@ -138,7 +138,6 @@ boundary).
 | upload-documents | `POST /api/v1/companies/{id}/documents` (multipart `files`) | bearer |
 | add-url-source | `POST /api/v1/companies/{id}/documents/from-url` `{urls}` | bearer |
 | delete-document | `DELETE /api/v1/companies/{id}/documents/{doc_id}` | bearer |
-| api-status | `GET /health` | public (raw `fetch`, no token) |
 
 `GET /api/v1/companies/{id}` exists on the backend but the SPA never calls it —
 selection is the in-memory `company_id` from the list.
@@ -150,10 +149,11 @@ selection is the in-memory `company_id` from the list.
 | State | View |
 |---|---|
 | No session | Auth screen (`data-testid="login-screen"` wrapping `auth-screen`): login ⇄ signup, plus Google |
-| Session + `?checkout=success` still pending | `CheckoutPending` (`data-testid="checkout-pending"`) polls `GET /auth/me` |
-| Session + no `active` / `trialing` plan, and `role` is `user` | `BillingScreen` (`data-testid="billing-screen"`) |
-| Session + header/upgrade set `showBilling` | Same billing screen. **Back to panel** only while status is `active` or `trialing` |
-| Session + active plan, or superadmin, and billing is closed | Panel: sidebar + (`CompanyDetail` or `ProductOverview`) |
+| Any session | Two-pane layout: `CompaniesSidebar` plus the main pane below. The sidebar footer (`data-testid="sidebar-account"`) shows the email, an icon-only theme toggle, **Sign out**, and — unless `role` is `superadmin` — `data-testid="plan-pill"` plus **Billing** |
+| Session + `?checkout=success` still pending | Main pane is `CheckoutPending` (`data-testid="checkout-pending"`), which polls `GET /auth/me`. The sidebar stays |
+| Session + no `active` / `trialing` plan, and `role` is `user` | Main pane is `BillingScreen` (`data-testid="billing-screen"`). The sidebar stays. With `max_companies` 0 the create form is `data-testid="subscribe-hint"`: `Subscribe to add a company.` |
+| Session + sidebar/upgrade set `showBilling` | Same plan cards in the main pane. **Back to panel** only while status is `active` or `trialing` |
+| Session + active plan, or superadmin, and billing is closed | Main pane: `CompanyDetail` or `ProductOverview` |
 
 `checkoutPending` wins over the plan cards whenever it is set, including for a
 user who already has access, until polling clears it.
@@ -185,11 +185,14 @@ Google start is a navigation to `{API_URL}/api/v1/auth/google/login`, not an XHR
 6. Failure: same backend string for unknown email and wrong password
    (`Invalid email or password`), including a Google-only account. Password
    fields are cleared after the attempt.
-7. Panel success: header shows the email. `selectedCompanyId` starts `null`, so
-   the main pane is `ProductOverview` (`data-testid="product-overview"`).
-   Non-superadmin header adds `data-testid="plan-pill"` (`basic · trialing`)
-   and **Billing**. `StatusPill` is only for document statuses, so the plan
-   line is a plain span.
+7. Panel success: the sidebar account block shows the email and **Sign out**.
+   `selectedCompanyId` starts `null`, so the main pane is `ProductOverview`
+   (`data-testid="product-overview"`). Non-superadmin accounts also get
+   `data-testid="plan-pill"` (`basic · trialing`) and **Billing**, which
+   swaps the main pane to the plan cards. The same account row has an
+   icon-only theme toggle (moon switches to dark, sun switches to light).
+   The auth screen keeps that icon in the top-right corner. `StatusPill` is
+   only for document statuses, so the plan line is a plain span.
 
 ### Billing screen
 
@@ -203,7 +206,7 @@ Plan cards are fixed copy in `billing-screen.tsx`:
 **Subscribe** calls `createCheckout(plan)` and assigns `checkout_url`. The
 current `active` / `trialing` card is disabled (**Current plan**). **Manage
 subscription** calls `getPortalUrl()` and opens `portal_url` in a new tab.
-Footer **Sign out** is `logout()`.
+**Sign out** lives in the sidebar account block and calls `logout()`.
 
 `CheckoutPending` polls every 2s, up to 30 attempts. `active` or `trialing`
 clears `checkoutPending` and calls `loadCompanies()`. After 30 attempts the
@@ -275,7 +278,7 @@ shipped widget/admin UI.
 
 ### Sign out
 
-Header **Sign out**, or the billing footer, → `logout()`. Next reload stays on
+Sidebar **Sign out** → `logout()`. Next reload stays on
 the auth screen. `checkoutPending` and `showBilling` are cleared with the session.
 
 ## Embed snippet
