@@ -3,6 +3,8 @@ from langchain_openai import ChatOpenAI
 
 from app.config import get_settings
 
+_DEEPSEEK_THINKING_DISABLED = {"thinking": {"type": "disabled"}}
+
 
 def create_chat_llm(
     *,
@@ -18,5 +20,15 @@ def create_chat_llm(
             streaming=streaming,
             temperature=temperature,
             max_tokens=max_tokens,
+        )
+    if settings.llm_provider == "deepseek":
+        return ChatOpenAI(
+            model=settings.deepseek_model,
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            streaming=streaming,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            extra_body=_DEEPSEEK_THINKING_DISABLED,
         )
     raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")

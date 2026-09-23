@@ -124,6 +124,20 @@ def require_openai_key() -> None:
         )
 
 
+def require_chat_credentials() -> None:
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured; set it in .env and restart",
+        )
+    if settings.llm_provider == "deepseek" and not settings.deepseek_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="DEEPSEEK_API_KEY is not configured; set it in .env and restart",
+        )
+
+
 async def require_company(
     company_id: str,
     repo: CompanyRepository = Depends(get_company_repo),

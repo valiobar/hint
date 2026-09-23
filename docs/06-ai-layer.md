@@ -19,11 +19,13 @@ Two public endpoints under `/api/v1`:
 
 Both consume `RetrievalService.retrieve()` unchanged. Unknown `company_id` is
 rejected with 404 **before** any LLM or retrieval work. Empty
-`OPENAI_API_KEY` is 503 on both (same `require_openai_key` guard as upload /
-`/retrieve`). The stack still boots without a key (Phase 0 behavior).
+`OPENAI_API_KEY` is 503 on both (query embeddings). Empty `DEEPSEEK_API_KEY`
+is also 503 when `LLM_PROVIDER=deepseek` (the default). Upload and `/retrieve`
+still only check `OPENAI_API_KEY`. The stack still boots without either key.
 
-A real `OPENAI_API_KEY` is required to exercise these endpoints. The embed
-widget calls them from the host page. Curl / Swagger remain the debug path.
+Chat and hint generation default to DeepSeek Flash. Embeddings stay on OpenAI.
+The embed widget calls both endpoints from the host page. Curl / Swagger remain
+the debug path.
 
 ## Layering
 
@@ -265,15 +267,19 @@ signed in"`, `"Never present a control as visible"`) so a regression in
 ## LLM factory
 
 `create_chat_llm()` in `backend/app/ai/llm_factory.py` reads `LLM_PROVIDER` /
-`LLM_MODEL` / `OPENAI_API_KEY` from settings.
+`LLM_MODEL` / `OPENAI_API_KEY` / `DEEPSEEK_*` from settings.
 
 | `LLM_PROVIDER` | Behavior |
 |---|---|
-| `openai` (default) | `ChatOpenAI` with the requested `streaming` / `temperature` / `max_tokens` |
+| `deepseek` (default) | `ChatOpenAI` at `DEEPSEEK_BASE_URL`, model `DEEPSEEK_MODEL` (`deepseek-flash`), thinking disabled |
+| `openai` | `ChatOpenAI` with `LLM_MODEL` (default `gpt-4o-mini`) and `OPENAI_API_KEY` |
 | anything else | `ValueError("Unsupported LLM provider: …")` at call time |
 
-Anthropic is reserved for later — add a branch in the factory; call sites stay
-unchanged.
+DeepSeek Flash enables thinking by default. The factory always sends
+`extra_body={"thinking": {"type": "disabled"}}` so the short max-token budgets
+below still return visible text instead of being spent on reasoning.
+
+Call sites stay unchanged when switching providers.
 
 Call-site defaults:
 
@@ -286,14 +292,17 @@ Call-site defaults:
 
 ## Environment variables
 
-Defined in `backend/app/config.py`. Compose currently passes `LLM_MODEL` and
-`OPENAI_API_KEY`; the others use settings defaults unless you export them.
+Defined in `backend/app/config.py`. Compose passes the LLM and DeepSeek vars
+below from `.env`.
 
 | Variable | Settings default | Consumed by | Notes |
 |---|---|---|---|
-| `OPENAI_API_KEY` | `""` | embeddings + chat/hint LLM | **Required** for `/chat`, `/hint`, upload, `/retrieve`. Empty → 503 with an actionable message. Stack still boots. |
-| `LLM_PROVIDER` | `openai` | `create_chat_llm` | Unknown value raises at first LLM call. Not passed by compose (code default). |
-| `LLM_MODEL` | `gpt-4o-mini` | `create_chat_llm` | Compose: `${LLM_MODEL:-gpt-4o-mini}` |
+| `OPENAI_API_KEY` | `""` | embeddings + OpenAI chat/hint | **Required** for upload, `/retrieve`, `/chat`, `/hint` (query embeddings). Empty → 503. Stack still boots. |
+| `LLM_PROVIDER` | `deepseek` | `create_chat_llm` | `deepseek` or `openai`. Unknown value raises at first LLM call. Compose: `${LLM_PROVIDER:-deepseek}` |
+| `LLM_MODEL` | `gpt-4o-mini` | `create_chat_llm` | Used only when `LLM_PROVIDER=openai`. Compose: `${LLM_MODEL:-gpt-4o-mini}` |
+| `DEEPSEEK_API_KEY` | `""` | `create_chat_llm` | **Required** for `/chat` and `/hint` when `LLM_PROVIDER=deepseek`. Empty → 503. Upload and `/retrieve` are unaffected. |
+| `DEEPSEEK_MODEL` | `deepseek-flash` | `create_chat_llm` | Canonical Flash name. Legacy `deepseek-v4-flash` still works if set. |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | `create_chat_llm` | OpenAI-compatible DeepSeek endpoint |
 | `HINT_CACHE_TTL_SECONDS` | `3600` | `HintCache` | Not passed by compose (code default). |
 | `HINT_CACHE_MAX_ENTRIES` | `1024` | `HintCache` | Not passed by compose (code default). |
 
@@ -321,14 +330,15 @@ any LLM spend. The Phase 6 "backend re-validates caps" item is already free.
 |---|---|---|
 | `404 {"detail":"Unknown company_id"}` | Body `company_id` is not in Mongo | Raised in-handler (ID is in the body, same pattern as `/retrieve`) before retrieval or LLM. Stream never starts. |
 | `422` validation error | > 60 interactive elements, > 2000-char excerpt, empty `messages`, etc. | Pydantic / FastAPI. No LLM spend. |
-| `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` | Empty key | Router-level `require_openai_key`. Set the key, `docker compose up -d backend`. |
+| `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` | Empty OpenAI key | Router-level `require_chat_credentials` (and `require_openai_key` on upload / retrieve). Set the key, `docker compose up -d backend`. |
+| `503 {"detail":"DEEPSEEK_API_KEY is not configured; set it in .env and restart"}` | `LLM_PROVIDER=deepseek` and the key is empty | `/chat` and `/hint` only. Upload and `/retrieve` are unaffected. |
 | `event: error` then stream close | LLM/network failure after tokens were sent | HTTP status stays 200. Widget must mark the assistant message failed. |
 | Chat answer says docs don't cover it; `done` has `"sources":[]` | Company exists, no ready documents | Expected empty-KB path. |
 | Chat `done.sources` mixes a URL and a filename | Some retrieved chunks have `source_url`, others do not | Expected. Widget renders `http(s)://` values as links and the rest as plain text. |
 | Hint `source: null`, generic label-based sentence | Empty KB | Expected. Prompt falls back to the element label. |
 | Second identical hint is still slow | Different `url` **path**, `selector_path`, or `element.text`; or process restarted | Cache key ignores query string only. Restart clears the in-process store. |
 | Follow-up answer drifts off-topic | Condense rewrite was empty or weak | Node falls back to the raw last user message if the rewrite is blank; otherwise tune `CONDENSE_PROMPT`. |
-| `ValueError: Unsupported LLM provider` | `LLM_PROVIDER` is not `openai` | Set `LLM_PROVIDER=openai` or add a factory branch. |
+| `ValueError: Unsupported LLM provider` | `LLM_PROVIDER` is not `deepseek` or `openai` | Set `LLM_PROVIDER=deepseek` or `openai`. |
 
 ## Tests
 
@@ -339,6 +349,7 @@ Unit tests in `backend/tests/` use in-memory fakes (no Mongo / Chroma / network)
 | `test_assist_models.py` | Contract caps (41 elements / 2001-char excerpt / empty messages → validation error) |
 | `test_hint_cache.py` | Key stability across query-string URL variants; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query prefers `text` then `aria-label`; 140-char clamp; `source: null` on empty KB |
+| `test_llm_factory.py` | DeepSeek Flash client (base URL + thinking disabled); OpenAI uses `LLM_MODEL`; unknown provider raises |
 | `test_chat_graph.py` | Single message skips condense; retrieval called with `(company_id, query, 5)`; answer state non-empty; `assess_page` skips the LLM without captured elements and writes the blocker verdict into `page_state` otherwise |
 | `test_url_ingestion.py` | Chat sources prefer `source_url` over filename and dedupe mixed lists; retrieval mapping covered in `test_retrieval_service.py` |
 

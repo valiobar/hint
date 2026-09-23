@@ -34,7 +34,8 @@ signature-checked, not JWT-checked.
 cp .env.example .env
 # Required before first boot:
 #   ADMIN_PASSWORD   — seeded superadmin login (empty skips that seed only)
-#   OPENAI_API_KEY   — upload, /retrieve, /chat, /hint (503 without it)
+#   OPENAI_API_KEY   — upload, /retrieve, embeddings (503 without it)
+#   DEEPSEEK_API_KEY — /chat, /hint when LLM_PROVIDER=deepseek (default)
 # Google and Polar are optional at boot — see "One-time external setup".
 docker compose up --build
 ```
@@ -104,7 +105,7 @@ Contract, including secret rotation: [`docs/05-auth.md`](docs/05-auth.md).
 
 ## Try it (Admin → Demo → widget)
 
-With `ADMIN_PASSWORD` and `OPENAI_API_KEY` set, stack up:
+With `ADMIN_PASSWORD`, `OPENAI_API_KEY`, and `DEEPSEEK_API_KEY` set, stack up:
 
 1. Open http://localhost:3001 — login screen.
 2. Sign in with `ADMIN_EMAIL` (default `admin@hint.local`) and the
@@ -223,9 +224,12 @@ backend; the variables below are the ones you normally set on the host.
 | `POLAR_ENVIRONMENT` | `sandbox` | backend | `sandbox` or production |
 | `POLAR_PRODUCT_ID_BASIC` | `""` | backend | Basic product (1 company, files only) |
 | `POLAR_PRODUCT_ID_PRO` | `""` | backend | Pro product (10 companies, files and URLs) |
-| `OPENAI_API_KEY` | `""` | backend | Required for upload, `/retrieve`, `/chat`, `/hint` (503 without it); stack boots without it |
-| `LLM_PROVIDER` | `openai` | backend | Chat / hint factory; unknown value raises at first LLM call |
-| `LLM_MODEL` | `gpt-4o-mini` | backend | Chat / hint model |
+| `OPENAI_API_KEY` | `""` | backend | Required for upload, `/retrieve`, `/chat`, `/hint` embeddings (503 without it); stack boots without it |
+| `LLM_PROVIDER` | `deepseek` | backend | Chat / hint factory (`deepseek` or `openai`); unknown value raises at first LLM call |
+| `LLM_MODEL` | `gpt-4o-mini` | backend | OpenAI chat / hint model (`LLM_PROVIDER=openai` only) |
+| `DEEPSEEK_API_KEY` | `""` | backend | Required for `/chat` and `/hint` when `LLM_PROVIDER=deepseek` |
+| `DEEPSEEK_MODEL` | `deepseek-flash` | backend | Default chat / hint model |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | backend | DeepSeek OpenAI-compatible API |
 | `HINT_CACHE_TTL_SECONDS` | `3600` | backend | In-process hint cache TTL (cleared on backend restart) |
 | `HINT_CACHE_MAX_ENTRIES` | `1024` | backend | Hint cache cap (oldest-first eviction) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | backend | Document embeddings |
@@ -276,7 +280,8 @@ curl -s -X POST localhost:8000/api/v1/retrieve \
 ```
 
 Without `OPENAI_API_KEY`, the stack still boots but upload, `/retrieve`,
-`/chat`, and `/hint` return `503`. A scanned/image-only PDF is marked
+`/chat`, and `/hint` return `503`. Without `DEEPSEEK_API_KEY`, upload and
+`/retrieve` still work; `/chat` and `/hint` return `503`. A scanned/image-only PDF is marked
 `"status": "failed"` (no OCR in the POC) — the rest of the batch still
 ingests.
 
