@@ -1,21 +1,33 @@
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { LoginForm } from '@/features/login';
 import { setUnauthorizedHandler } from '@/shared/api';
-import { useAdminStore } from '@/shared/store/admin-store';
-import { Button, ThemeToggle } from '@/shared/ui';
-import { ApiStatusBadge } from '@/widgets/api-status';
+import { consumeAuthCallback } from '@/shared/lib/auth-callback';
+import {
+	selectNeedsBilling,
+	useAdminStore,
+} from '@/shared/store/admin-store';
+import { ThemeToggle } from '@/shared/ui';
+import { AuthScreen } from '@/widgets/auth-screen';
+import { BillingScreen, CheckoutPending } from '@/widgets/billing';
 import { CompaniesSidebar } from '@/widgets/companies-sidebar';
 import { CompanyDetail } from '@/widgets/company-detail';
 import { ProductOverview } from '@/widgets/product-overview';
 import styles from './app.module.css';
 
 export const App = () => {
-	const { isAuthenticated, adminEmail, selectedCompanyId } = useAdminStore(
+	const {
+		isAuthenticated,
+		selectedCompanyId,
+		needsBilling,
+		showBilling,
+		checkoutPending,
+	} = useAdminStore(
 		useShallow((s) => ({
 			isAuthenticated: s.isAuthenticated,
-			adminEmail: s.adminEmail,
 			selectedCompanyId: s.selectedCompanyId,
+			needsBilling: selectNeedsBilling(s),
+			showBilling: s.showBilling,
+			checkoutPending: s.checkoutPending,
 		})),
 	);
 	const restoreSession = useAdminStore((s) => s.restoreSession);
@@ -26,6 +38,18 @@ export const App = () => {
 	}, [logout]);
 
 	useEffect(() => {
+		const cb = consumeAuthCallback();
+		if (cb.oauthError) {
+			useAdminStore.setState({
+				authError:
+					cb.oauthError === 'oauth_state'
+						? 'Google sign-in expired — try again'
+						: 'Google sign-in failed — try again',
+			});
+		}
+		if (cb.checkoutReturn) {
+			useAdminStore.setState({ checkoutPending: true });
+		}
 		void restoreSession();
 	}, [restoreSession]);
 
@@ -35,28 +59,28 @@ export const App = () => {
 				<div className={styles.loginTheme}>
 					<ThemeToggle />
 				</div>
-				<LoginForm />
+				<AuthScreen />
 			</main>
 		);
 	}
+
+	const showPlans = needsBilling || showBilling;
 
 	return (
 		<div className={styles.layout}>
 			<CompaniesSidebar />
 			<div className={styles.workspace}>
-				<header className={styles.header}>
-					<h1 className={styles.visuallyHidden}>Hint Admin</h1>
-					<div className={styles.headerActions}>
-						<ApiStatusBadge />
-						<span className={styles.adminEmail}>{adminEmail}</span>
-						<ThemeToggle />
-						<Button variant="neutral" onClick={logout}>
-							Sign out
-						</Button>
-					</div>
-				</header>
+				<h1 className={styles.visuallyHidden}>Hint Admin</h1>
 				<main className={styles.main}>
-					{selectedCompanyId ? <CompanyDetail /> : <ProductOverview />}
+					{checkoutPending ? (
+						<CheckoutPending />
+					) : showPlans ? (
+						<BillingScreen />
+					) : selectedCompanyId ? (
+						<CompanyDetail />
+					) : (
+						<ProductOverview />
+					)}
 				</main>
 			</div>
 		</div>

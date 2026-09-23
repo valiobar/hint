@@ -17,7 +17,47 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Backend pytest
+        working-directory: backend
+        run: |
+          pip install -r requirements-dev.txt
+          python -m pytest tests/ -q
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: |
+            admin/pnpm-lock.yaml
+            widget/pnpm-lock.yaml
+
+      - name: Admin unit tests
+        working-directory: admin
+        run: pnpm install --frozen-lockfile && pnpm test
+
+      - name: Widget unit tests
+        working-directory: widget
+        run: pnpm install --frozen-lockfile && pnpm test
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

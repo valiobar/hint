@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAdminStore } from '@/shared/store/admin-store';
-import { Button, TextInput, Wordmark } from '@/shared/ui';
+import { Button, TextInput } from '@/shared/ui';
 import { loginSchema } from '../model/schema';
 import styles from './login-form.module.css';
 
@@ -31,13 +31,6 @@ export const LoginForm = () => {
 			onSubmit={handleSubmit}
 			data-testid="login-form"
 		>
-			<Wordmark label="hint" />
-			<p className={styles.kicker}>Admin</p>
-			<h1>Hint Admin</h1>
-			<p className={styles.lead}>
-				In-app AI guidance grounded in your docs and the live page.
-				Sign in to manage companies and the embed.
-			</p>
 			<TextInput
 				value={email}
 				onChange={setEmail}

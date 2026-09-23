@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { applyTheme, readTheme, writeTheme, type Theme } from '@/shared/lib/theme';
 import { Button } from '@/shared/ui/button/button';
+import { MoonIcon, SunIcon } from '@/shared/ui/icons/theme-icons';
+import styles from './theme-toggle.module.css';
 
 export const ThemeToggle = () => {
 	const [theme, setTheme] = useState<Theme>(() => readTheme());
@@ -16,13 +18,16 @@ export const ThemeToggle = () => {
 		applyTheme(next);
 	};
 
+	const nextTheme = theme === 'light' ? 'dark' : 'light';
+
 	return (
 		<Button
 			variant="ghost"
+			className={styles.toggle}
 			onClick={handleToggle}
-			aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+			aria-label={`Switch to ${nextTheme} theme`}
 		>
-			{theme === 'light' ? 'Dark' : 'Light'}
+			{theme === 'light' ? <MoonIcon /> : <SunIcon />}
 		</Button>
 	);
 };

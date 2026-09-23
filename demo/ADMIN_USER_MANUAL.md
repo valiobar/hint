@@ -28,7 +28,8 @@ changes.
 
 | You do this in Admin | What it enables |
 |---|---|
-| Sign in as the preset admin | Companies and documents are JWT-protected |
+| Sign in, sign up, or continue with Google | Companies and documents are JWT-protected |
+| Subscribe to Basic or Pro | A `user` account can create companies only while the plan is `active` or `trialing` |
 | Create a company | Gets a `cmp_…` id and its own knowledge-base collection |
 | Upload `.pdf` / `.md` / `.txt` / `.html` | Text is extracted, chunked, embedded, stored in Chroma |
 | Wait until status is `ready` | Chat and hover hints can answer from that doc |
@@ -46,16 +47,17 @@ the current page.
 ## 2. Before you open Admin
 
 The production stack is already running behind Caddy on the droplet
-(`159.89.26.67`). You only need the admin email and password from the
-server `.env` (`ADMIN_EMAIL`, `ADMIN_PASSWORD`).
+(`159.89.26.67`). Sign up on the auth screen, or sign in as the seeded
+superadmin (`ADMIN_EMAIL` / `ADMIN_PASSWORD` in the server `.env`).
 
 To run the same panel on your laptop instead:
 
 ```bash
 cp .env.example .env
-# Set both of these in .env:
-#   ADMIN_PASSWORD   — required; empty means every login is 401
+# Set these in .env:
 #   OPENAI_API_KEY   — required for upload / chat / hints (503 without it)
+#   ADMIN_PASSWORD   — required for the seeded superadmin; sign-up works without it
+#   POLAR_*          — required before Subscribe works (see README)
 docker compose up --build
 ```
 
@@ -66,23 +68,36 @@ docker compose up --build
 | Widget CDN | https://cdn.hint.codebar.cc | http://localhost:1337 |
 | Demo | https://demo.hint.codebar.cc | http://localhost:3002 |
 
-Default login email is `ADMIN_EMAIL` (usually `admin@hint.local`). The password
-is whatever you put in `ADMIN_PASSWORD`. There is no “forgot password” and no
-self-registration — one preset operator, seeded when the backend starts.
+Two accounts can open the panel:
+
+| Account | How you get it | Billing |
+|---|---|---|
+| Seeded superadmin | `ADMIN_EMAIL` / `ADMIN_PASSWORD` in the server `.env` (usually `admin@hint.local`) | Skips the billing screen and plan limits |
+| Registered user | **Sign up** on the auth screen, or **Continue with Google** | Lands on **Choose your plan**. Company creation stays locked until Polar reports `active` or `trialing` |
+
+There is no “forgot password” in the UI. Google sign-in needs
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Checkout needs
+`POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, and the two product ids.
+Empty Polar config makes **Subscribe** return 503. Trial length is set on
+the Polar product, not in this repo. Local Polar webhooks need a public
+URL (see the README checklist).
 
 A `company_id` created on your laptop is **not** on production (and the
 other way around). Always open Demo with a `cmp_…` from **this** Admin.
 
 ---
 
-## 3. Sign in
+## 3. Sign in, sign up, and Google
 
-1. Open https://admin.hint.codebar.cc.
-2. You should see **Hint Admin** with Email and Password fields.
-3. Enter the admin email and password from `.env`.
-4. Click **Sign in**. The button reads **Signing in…** while the request runs.
+Open https://admin.hint.codebar.cc. The card is **Hint Admin**. It starts on
+**Sign in**. **No account yet? Sign up** switches to registration;
+**Already have an account? Sign in** switches back. **Continue with Google**
+is on both modes.
 
-### Validation (before the request)
+### 3.1 Sign in
+
+1. Enter email and password.
+2. Click **Sign in**. The button reads **Signing in…** while the request runs.
 
 | Field | Rule | Message |
 |---|---|---|
@@ -92,22 +107,66 @@ other way around). Always open Demo with a `cmp_…` from **this** Admin.
 This is not a full email-format check. `Admin@Hint.local ` (mixed case, trailing
 space) still works — the backend lowercases and trims.
 
-### After a successful sign-in
-
-- The two-pane panel appears.
-- The header shows your email and a **Sign out** button.
-- The companies list loads on the left.
-- The token is stored in the browser (`localStorage`) so a refresh stays signed in.
-
 The password field is cleared after every attempt (success or failure).
+
+| Where you land | Who |
+|---|---|
+| Two-pane panel | Superadmin, or a user whose plan is `active` or `trialing` |
+| **Choose your plan** | A user with no plan, or `canceled` / `revoked` / `past_due` |
+
+On the panel, the sidebar bottom shows your email and **Sign out**. A
+non-superadmin account also shows a plan line (`basic · trialing`) and a
+**Billing** button there. **Billing** keeps the sidebar and opens the plan
+cards in the main pane. The companies list loads above the account block.
+The token is stored in the browser (`localStorage`) so a refresh stays
+signed in.
+
+### 3.2 Sign up
+
+1. Click **No account yet? Sign up**.
+2. Enter email, password, and confirm password.
+3. Click **Create account** (label becomes **Creating account…**).
+
+| Field | Rule | Message |
+|---|---|---|
+| Email | Valid email after trim | `Enter a valid email` |
+| Password | 8–200 characters, with a lowercase letter, an uppercase letter, a number, and a symbol | The first failing rule (`Password must be at least 8 characters`, `…lowercase letter`, `…uppercase letter`, `…a number`, `…a symbol`, `…at most 200 characters`) |
+| Confirm | Must equal the password | `Passwords do not match` |
+
+A new account has no plan. Success opens **Choose your plan**, not the
+company list. Password and confirm are cleared after the attempt.
+
+| Message | Meaning | What to do |
+|---|---|---|
+| `Email is already registered` | That email already has a password account (HTTP 409) | Switch to **Sign in**, or use Google (Google links an existing email) |
+
+### 3.3 Continue with Google
+
+**Continue with Google** leaves the admin page for
+`{API}/api/v1/auth/google/login` (production:
+`https://api.hint.codebar.cc/api/v1/auth/google/login`). After Google
+accepts the account, the API redirects back to Admin with `#token` and
+`#email` in the URL. Admin stores that session, then removes the fragment
+so a refresh does not replay it.
+
+A Google account with no plan opens billing, same as email sign-up. An
+account that already has `active` or `trialing` opens the panel. If an
+older session was in this browser, the fragment session replaces it.
+
+| Fragment | What you see |
+|---|---|
+| `#error=oauth_state` | `Google sign-in expired — try again` on the auth screen. No session is stored |
+| `#error=google_auth_failed` | `Google sign-in failed — try again`. No session is stored |
+
+Empty `GOOGLE_CLIENT_ID` makes the Google start URL return 503.
 
 ### Sign-in errors
 
 | Message | Meaning | What to do |
 |---|---|---|
-| `Invalid email or password` | Wrong creds, **or** `ADMIN_PASSWORD` was empty when the backend booted (no admin user seeded) | Check the server `.env`, then restart `backend` and try again |
+| `Invalid email or password` | Wrong creds, a Google-only account (no password), **or** `ADMIN_PASSWORD` was empty when the backend booted (no superadmin seeded) | Check the password, use Google for a Google-only account, or set `ADMIN_PASSWORD` and restart `backend` |
 | `API unreachable — is the backend running?` | Backend down, CORS, or the admin image was built with the wrong API URL | Confirm https://api.hint.codebar.cc/health; rebuild admin if `VITE_API_URL` changed |
-| Sudden jump back to the login screen (no error wall) | Token expired, secret rotated, or any authenticated call returned 401 | Sign in again |
+| Sudden jump back to the auth screen (no error wall) | Token expired, secret rotated, or any authenticated call returned 401 | Sign in again |
 
 Default token lifetime is **12 hours** (`ACCESS_TOKEN_TTL_MINUTES=720`). There
 is no refresh token. Sign-out only clears the browser; an already-issued token
@@ -115,12 +174,84 @@ stays valid on the server until it expires.
 
 ---
 
+## 3a. Billing
+
+A `user` who is not `active` or `trialing` sees this screen instead of the
+panel. A subscribed user can also open it from the header **Billing** button.
+
+```
+┌──────────────────┬──────────────────────────────────┐
+│  hint            │  Billing                         │
+│  Companies       │  Choose your plan               │
+│                  │  You need an active subscription…│
+│                  │                                  │
+│                  │  Current plan  basic  [trialing] │
+│                  │  ┌ Basic ──┐  ┌ Pro ─────────┐  │
+│                  │  │[Subscribe]│  │[Subscribe]   │  │
+│                  │  └─────────┘  └──────────────┘  │
+│ you@example.com  │  [Back to panel] [Manage sub…]  │
+│ basic · trialing │                                  │
+│ [Billing]        │                                  │
+│ [Sign out]       │                                  │
+└──────────────────┴──────────────────────────────────┘
+```
+
+| Control | When it shows | What it does |
+|---|---|---|
+| **Subscribe** on a card | That card is not your current `active` / `trialing` plan | `POST /api/v1/billing/checkout` with `{"plan":"basic"}` or `{"plan":"pro"}`, then the browser goes to the Polar checkout URL |
+| **Current plan** | The card matches a plan that is already `active` or `trialing` | Button stays disabled |
+| **Current** badge + status pill | You already have a `plan` | Shows `basic` or `pro`, and `trialing` / `active` / `canceled` / `revoked` / `past due` |
+| **Back to panel** | Status is `active` or `trialing` (you opened billing from the sidebar, or you are still inside the trial) | Returns the main pane to the company view. The sidebar stays. Hidden when the plan does not grant access |
+| **Manage subscription** | You already have a `plan` on the account | Opens the Polar customer portal in a new tab (`GET /api/v1/billing/portal`) |
+| **Sign out** | Always, in the sidebar account block | Clears the session and returns to the auth screen |
+
+**Subscribe** reads **Redirecting…** while the checkout URL is loading.
+Closing the Polar tab without paying leaves you on the plan cards the next
+time you open Admin — nothing was stored.
+
+### After you pay
+
+Polar redirects back to Admin with `?checkout=success`. Admin shows
+**Finalizing your subscription…** and polls `GET /auth/me` about every 2
+seconds (up to about a minute). When the status becomes `active` or
+`trialing`, the panel opens and companies load.
+
+If the webhook is slower than that minute, the screen says **Payment
+received — your plan is being activated. Refresh in a minute.** A reload
+runs `GET /auth/me` again and opens the panel once Polar has written the
+plan.
+
+Trial days are whatever you configured on the Polar product. The Admin
+pill shows `trialing` for the whole trial; you can create companies during
+it. Card entry happens on Polar. In the Polar **sandbox**, the test card
+is `4242 4242 4242 4242` (any future expiry, any CVC).
+
+### What each plan unlocks
+
+| | Basic | Pro | Superadmin |
+|---|---|---|---|
+| How you get it | Subscribe | Subscribe, or upgrade from Basic | `ADMIN_EMAIL` seed. No Polar checkout |
+| Companies you can create | 1 | 10 | Effectively unlimited (limit 10000) |
+| File upload (`.pdf` `.md` `.txt` `.html`) | Yes | Yes | Yes |
+| Paste support-page URLs | No — company detail shows **URL ingestion is a Pro feature** and **Upgrade** | Yes | Yes |
+| Sidebar plan line and **Billing** | Yes (`basic · trialing`) | Yes | Hidden. Email and **Sign out** stay |
+| Sees other people's companies | No — list is only yours | No | Yes — every company |
+
+Downgrading (Pro → Basic, or cancel) keeps companies you already created.
+You can still open them, upload files, and edit starter questions. You
+cannot create another company past the new cap. A canceled, revoked, or
+past-due account goes back to **Choose your plan** on the next visit;
+existing companies stay on the account for when the plan is active again.
+
+The UI hides the create form and the URL form when the plan does not allow
+them. The API still answers **402** / **403** if something calls it directly.
+
+---
+
 ## 4. Screen layout
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Hint Admin     [API badge]   admin@hint.local   [Sign out]  │
-├────────────────────┬─────────────────────────────────────────┤
+┌────────────────────┬─────────────────────────────────────────┤
 │  [Company name   ] │  Company name                           │
 │  [Create company ] │  cmp_1a2b3c4d                           │
 │                    │                                         │
@@ -128,11 +259,11 @@ stays valid on the server until it expires.
 │  cmp_1a2b3c4d      │  <script …>                    [Copy]   │
 │                    │                                         │
 │                    │  Starter questions                      │
-│                    │  [How do I …                    ] × 4   │
-│                    │                    [Save questions]     │
-│                    │                                         │
-│  Contoso           │  Documents                              │
-│  cmp_9f8e7d6c      │  [ drop / browse files ]                │
+│  you@example.com ☽ │  [How do I …                    ] × 4   │
+│  basic · trialing  │                    [Save questions]     │
+│  [Billing]         │                                         │
+│  [Sign out]        │  Documents                              │
+│                    │  [ drop / browse files ]                │
 │                    │  user-manual.md  12 KB · 8 chunks  ready│
 │                    │                                 [Delete]│
 └────────────────────┴─────────────────────────────────────────┘
@@ -140,31 +271,20 @@ stays valid on the server until it expires.
 
 | Region | What it shows |
 |---|---|
-| Header | Title, API health badge, signed-in email, **Sign out** |
-| Left sidebar | Create-company form + company list |
-| Right pane | Empty placeholder until you select or create a company; then name, id, snippet, starter questions, dropzone, document list |
+| Left sidebar | Create-company form, or a plan-limit notice, plus the company list. The bottom account block shows email, an icon theme button, plan line + **Billing** (hidden for superadmin), and **Sign out** |
+| Right pane | Plan cards while billing is open; otherwise the product overview until you select or create a company, then name, id, snippet, starter questions, dropzone, document list |
 
 After a **page reload**, companies come back but **nothing is selected**. Click
 the company again. That is expected — selection is not saved.
 
 ---
 
-## 5. API status badge (header)
+## 5. Theme
 
-The badge calls `GET https://api.hint.codebar.cc/health` once when the panel
-loads (no login token).
-
-| Badge text | Meaning |
-|---|---|
-| `checking…` | Request in flight |
-| `API ok · mongo=ok · chroma=ok` | Backend + Mongo + Chroma healthy |
-| `API degraded · mongo=… · chroma=…` | Backend answered but a store ping failed |
-| `API unreachable` | Could not reach https://api.hint.codebar.cc |
-
-A red / unreachable badge usually means the backend container is down. Login
-and uploads will fail until it is back.
-
-The badge does **not** auto-refresh. Reload the admin page to check again.
+The sidebar account block has an icon button beside the email. In light mode
+it is a moon (**Switch to dark theme**). In dark mode it is a sun (**Switch
+to light theme**). The sign-in screen uses the same icon in the top-right
+corner. The choice is stored in the browser (`hint.admin.theme`).
 
 ---
 
@@ -192,6 +312,20 @@ The backend assigns a `company_id` like `cmp_1a2b3c4d`. You cannot rename or
 delete a company in this POC — only manage its documents and questions.
 
 Empty list copy: **No companies yet — create the first one above.**
+
+### When the plan is full
+
+The create form is replaced when you already have as many companies as
+`limits.max_companies`:
+
+| Account | What the sidebar shows |
+|---|---|
+| Basic, 1 company | **Plan limit reached (1 company).** plus **Upgrade plan** (opens billing) |
+| Pro, 10 companies | **Plan limit reached (10 companies).** No upgrade button — Pro is the top plan |
+| Superadmin | The create form stays |
+
+Companies you already have stay in the list and stay usable. **Upgrade plan**
+opens the same billing screen as the header button.
 
 Copy that `cmp_…` now. Demo and the embed snippet must use **this** id (a leftover
 id from another machine 404s and disables the widget).
@@ -239,7 +373,11 @@ nothing useful. You can mix files and support-page URLs on the same company.
   rejected ones stay under the dropzone (`Unsupported file type` / `File
   exceeds 10 MB`).
 
-**URLs** — under the dropzone, **Paste support page URLs, one per line
+**URLs** — Pro and the superadmin only. On Basic, the form is replaced by
+**URL ingestion is a Pro feature** and an **Upgrade** button (opens billing).
+The server returns 403 if a Basic token calls the URL endpoint anyway.
+
+When the form is visible, under the dropzone: **Paste support page URLs, one per line
 (http/https, max 20)**:
 
 1. Paste public `http`/`https` pages (one per line). No crawl — each line is
@@ -341,7 +479,7 @@ One failed file does **not** roll back the rest of the batch.
 | Message | Cause | Fix |
 |---|---|---|
 | `OPENAI_API_KEY is not configured; set it in .env and restart` | 503 — no key | Set the key, restart backend, upload again |
-| Network / unreachable | Backend down | Check the health badge and https://api.hint.codebar.cc/health |
+| Network / unreachable | Backend down | Check https://api.hint.codebar.cc/health, then retry |
 | Whole request rejected (413) | A file over 10 MB slipped past the client | Remove it and retry |
 
 ---
@@ -481,26 +619,36 @@ under the empty-state sentence. Click one — that question is sent.
 |---|---|---|
 | `Each question must be at most 120 characters` | A field is too long (client check) | Shorten it and save again |
 | Backend `detail` under the form (422) | More than 4 items, a blank entry, or a line over 120 characters | Fix the fields; the last good save is still stored |
-| Network / unreachable | Backend down | Check the health badge; retry Save |
+| Network / unreachable | Backend down | Retry Save once the API is back |
 
 ---
 
 ## 13. Recommended first-time walkthrough
 
-1. Open https://admin.hint.codebar.cc and sign in with the server `.env` creds.
-2. Confirm the header badge is `API ok`.
-3. Create a company, e.g. `Acme Invoicing`.
-4. Upload [`USER_MANUAL.md`](USER_MANUAL.md) from this `demo/` folder (it
+**Registered user**
+
+1. Open https://admin.hint.codebar.cc and click **No account yet? Sign up**
+   (or **Continue with Google**).
+2. On **Choose your plan**, subscribe to Basic or Pro and finish Polar
+   checkout. Wait until the panel appears (see [§3a](#3a-billing)).
+3. Confirm the sidebar plan line shows your plan.
+
+**Superadmin shortcut** — sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+and skip step 2. There is no plan line.
+
+4. Create a company, e.g. `Acme Invoicing`.
+5. Upload [`USER_MANUAL.md`](USER_MANUAL.md) from this `demo/` folder (it
    describes every control on the demo page — good Hint training data).
-5. Wait until the row is `ready` and `chunk_count` is greater than 0.
-6. Under the snippet, save three starter questions (e.g. “How do I
+   On Pro or as superadmin you can also paste a public support-page URL.
+6. Wait until the row is `ready` and `chunk_count` is greater than 0.
+7. Under the snippet, save three starter questions (e.g. “How do I
    create an invoice?”, “How do I export a report?”, “How do I add a
    customer?”).
-7. Copy the snippet, or open
+8. Copy the snippet, or open
    `https://demo.hint.codebar.cc/?company_id=` plus the `cmp_…` id from the header.
-8. On the demo: open Hint chat — click a chip, or type “how do I create
+9. On the demo: open Hint chat — click a chip, or type “how do I create
    an invoice?”
-9. Toggle the lightbulb and hover **Export report** / **Customer name**.
+10. Toggle the lightbulb and hover **Export report** / **Customer name**.
 
 If answers are empty or generic, the doc is not `ready`, the wrong
 `company_id` is on the page, or the API key is missing.
@@ -511,8 +659,8 @@ If answers are empty or generic, the doc is not `ready`, the wrong
 
 | Action | Result |
 |---|---|
-| **Sign out** | Token and email cleared; next visit is the login screen |
-| Reload while signed in | Session restored via `GET /auth/me`; companies reload; **selection is lost** |
+| **Sign out** (sidebar account block) | Token and email cleared; next visit is the auth screen. Billing flags are cleared too |
+| Reload while signed in | Session restored via `GET /auth/me`; companies reload; **selection is lost**. A user without an active plan sees billing again |
 | Token expired / `JWT_SECRET` changed | Next API call 401 → login screen |
 | Private-mode Safari (or `localStorage` blocked) | Login can work for this tab only; reload returns to login |
 | Two tabs | Sign-out in one tab does **not** sign the other out until that tab hits a 401 |
@@ -525,8 +673,8 @@ new password is required on the next login.
 
 ## 15. What you cannot do in this POC
 
-- Create extra admin users, roles, or invite links
 - Reset or change the password from the UI
+- Invite links or extra roles beyond `user` and the seeded superadmin
 - Rename or delete a company
 - Edit or reprocess a document in place
 - Search / filter / paginate companies or documents
@@ -543,8 +691,13 @@ Those are out of scope for the current panel.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Login always 401 | `ADMIN_PASSWORD` empty at boot | Set it, restart backend |
+| Superadmin login always 401 | `ADMIN_PASSWORD` empty at boot | Set it, restart backend. Email sign-up still works |
 | Login 401 after editing `.env` | Backend has not re-seeded | Restart the `backend` container |
+| **Subscribe** shows a 503 | Polar token or product ids empty | Set `POLAR_*` in `.env`, restart backend. Sandbox webhooks need a public URL |
+| Stuck on **Finalizing your subscription…** then the timeout line | Polar webhook has not updated the user yet | Refresh after a minute. Confirm `POLAR_WEBHOOK_SECRET` matches the endpoint Polar calls |
+| Sidebar says plan limit reached | Basic already has 1 company, or Pro has 10 | **Upgrade plan** (Basic), or use a company you already created |
+| URL form missing, “Pro feature” | Account is Basic (`url_ingestion` false) | **Upgrade**, or sign in as superadmin |
+| Google button ends on an error line | State cookie expired, or client id / redirect URI mismatch | Start **Continue with Google** again. See [`docs/05-auth.md`](../docs/05-auth.md) |
 | Bounce to login after rebuild | `JWT_SECRET` changed | Sign in again |
 | Badge `API unreachable` | Backend / Caddy not serving https://api.hint.codebar.cc | Check `backend` and Caddy; `curl -s https://api.hint.codebar.cc/health` |
 | Badge `degraded` | Mongo or Chroma unhealthy | Check those containers |
@@ -576,11 +729,15 @@ These backend variables control whether you can sign in and upload:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `ADMIN_EMAIL` | `admin@hint.local` | Login email |
-| `ADMIN_PASSWORD` | *(empty)* | Must be set or login is disabled |
+| `ADMIN_EMAIL` | `admin@hint.local` | Superadmin login email |
+| `ADMIN_PASSWORD` | *(empty)* | Must be set or **superadmin** login is disabled. Sign-up still works |
 | `JWT_SECRET` | `dev-insecure-secret-change-me` | Change before any shared stack |
 | `ACCESS_TOKEN_TTL_MINUTES` | `720` | How long a sign-in lasts |
 | `OPENAI_API_KEY` | *(empty)* | Required to ingest docs |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | *(empty)* | Empty disables **Continue with Google** (503) |
+| `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_ID_BASIC`, `POLAR_PRODUCT_ID_PRO` | *(empty)* | Empty makes checkout and the portal 503 |
+| `POLAR_ENVIRONMENT` | `sandbox` | `sandbox` or `production` |
+| `ADMIN_UI_URL` | `http://localhost:3001` | Where Google and Polar send the browser back |
 
 ---
 
@@ -602,4 +759,4 @@ These backend variables control whether you can sign in and upload:
 
 ---
 
-*Last updated for production hosts (`*.hint.codebar.cc`) and starter questions.*
+*Last updated for sign-up, Google, Polar billing (Basic / Pro), and plan gates in the panel.*

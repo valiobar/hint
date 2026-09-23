@@ -8,9 +8,10 @@ import {
 	ingestUrls as apiIngestUrls,
 	deleteDocument as apiDeleteDocument,
 	login as apiLogin,
+	register as apiRegister,
 	fetchMe,
 } from '@/shared/api';
-import type { Company, DocumentMeta } from '@/shared/api';
+import type { Company, DocumentMeta, Me } from '@/shared/api';
 import { toErrorMessage } from '@/shared/lib/error-message';
 import {
 	clearSession,
@@ -24,10 +25,16 @@ export interface UploadingFile {
 }
 
 interface AdminState {
+	me: Me | null;
+	/** Sidebar account label. Always `me.email` while a session is loaded. */
 	adminEmail: string | null;
 	isAuthenticated: boolean;
 	isAuthenticating: boolean;
 	authError: string | null;
+	/** Polar returned `?checkout=success`; checkout polling clears this. */
+	checkoutPending: boolean;
+	/** Sidebar "Billing" opens the plan cards in the main pane. */
+	showBilling: boolean;
 	companies: Company[];
 	isLoadingCompanies: boolean;
 	companiesError: string | null;
@@ -42,6 +49,8 @@ interface AdminState {
 	isSavingSuggestedQuestions: boolean;
 	suggestedQuestionsError: string | null;
 	login: (email: string, password: string) => Promise<void>;
+	register: (email: string, password: string) => Promise<void>;
+	refreshMe: () => Promise<Me | null>;
 	logout: () => void;
 	restoreSession: () => Promise<void>;
 	loadCompanies: () => Promise<void>;
@@ -54,11 +63,33 @@ interface AdminState {
 	updateSuggestedQuestions: (questions: string[]) => Promise<void>;
 }
 
+const SUBSCRIPTION_GRANTS_ACCESS: readonly string[] = ['active', 'trialing'];
+
+export const selectNeedsBilling = (s: AdminState): boolean =>
+	s.isAuthenticated &&
+	s.me?.role !== 'superadmin' &&
+	!SUBSCRIPTION_GRANTS_ACCESS.includes(s.me?.subscription_status ?? '');
+
+export const selectCanCreateCompany = (s: AdminState): boolean =>
+	(s.me?.limits.max_companies ?? 0) > s.companies.length;
+
+export const selectCanIngestUrls = (s: AdminState): boolean =>
+	s.me?.limits.url_ingestion ?? false;
+
+const signedIn = (me: Me) => ({
+	me,
+	adminEmail: me.email,
+	isAuthenticated: true as const,
+});
+
 export const useAdminStore = create<AdminState>()((set, get) => ({
+	me: null,
 	adminEmail: null,
 	isAuthenticated: false,
 	isAuthenticating: false,
 	authError: null,
+	checkoutPending: false,
+	showBilling: false,
 	companies: [],
 	isLoadingCompanies: false,
 	companiesError: null,
@@ -78,7 +109,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 		try {
 			const res = await apiLogin(email, password);
 			writeSession({ token: res.access_token, email: res.email });
-			set({ adminEmail: res.email, isAuthenticated: true });
+			const me = await fetchMe();
+			set(signedIn(me));
 			await get().loadCompanies();
 		} catch (err) {
 			set({ authError: toErrorMessage(err) });
@@ -87,12 +119,39 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 		}
 	},
 
+	register: async (email, password) => {
+		set({ isAuthenticating: true, authError: null });
+		try {
+			const res = await apiRegister(email, password);
+			writeSession({ token: res.access_token, email: res.email });
+			const me = await fetchMe();
+			set(signedIn(me));
+		} catch (err) {
+			set({ authError: toErrorMessage(err) });
+		} finally {
+			set({ isAuthenticating: false });
+		}
+	},
+
+	refreshMe: async () => {
+		try {
+			const me = await fetchMe();
+			set({ me, adminEmail: me.email });
+			return me;
+		} catch {
+			return null;
+		}
+	},
+
 	logout: () => {
 		clearSession();
 		set({
+			me: null,
 			adminEmail: null,
 			isAuthenticated: false,
 			authError: null,
+			checkoutPending: false,
+			showBilling: false,
 			companies: [],
 			companiesError: null,
 			selectedCompanyId: null,
@@ -113,8 +172,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			return;
 		}
 		try {
-			const admin = await fetchMe();
-			set({ adminEmail: admin.email, isAuthenticated: true });
+			const me = await fetchMe();
+			set(signedIn(me));
 			await get().loadCompanies();
 		} catch {
 			get().logout();

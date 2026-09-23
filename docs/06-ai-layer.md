@@ -1,15 +1,16 @@
 # Hint — AI Layer (LangGraph chat + hints)
 
-> **Status: Phase 3 complete.** Widget-facing chat (SSE) and hover hints sit on
-> top of the Phase 1 retrieval stack. Layering:
+> **Status: shipped.** Widget-facing chat (SSE) and hover hints sit on
+> top of the retrieval stack. The embed widget calls both endpoints. Layering:
 > `routes/assist.py` → `ai/` → `services/retrieval_service.py`.
 > Wire contract: `backend/app/models/assist.py`. HTTP surface:
 > [`02-backend.md`](02-backend.md). Auth (both endpoints stay **public**):
 > [`05-auth.md`](05-auth.md). Stack/env:
 > [`01-architecture-overview.md`](01-architecture-overview.md).
-> `03-widget.md` stays reserved for the Phase 4 widget.
+> Widget (embed, store, chat, hints, walkthroughs):
+> [`03-widget.md`](03-widget.md).
 
-Phase 3 adds two public endpoints under `/api/v1`:
+Two public endpoints under `/api/v1`:
 
 | Endpoint | Transport | Pipeline | Typical latency |
 |---|---|---|---|
@@ -21,9 +22,8 @@ rejected with 404 **before** any LLM or retrieval work. Empty
 `OPENAI_API_KEY` is 503 on both (same `require_openai_key` guard as upload /
 `/retrieve`). The stack still boots without a key (Phase 0 behavior).
 
-A real `OPENAI_API_KEY` is required to exercise these endpoints. The widget
-that will call them lands in Phases 4–5; until then curl / Swagger / a
-cross-origin `fetch` stream are the demo path.
+A real `OPENAI_API_KEY` is required to exercise these endpoints. The embed
+widget calls them from the host page. Curl / Swagger remain the debug path.
 
 ## Layering
 
@@ -101,9 +101,9 @@ fall back to `filename`. Mixed lists are allowed (a URL next to a PDF
 name). Hint `source` still uses `filename` only — the hover label is not
 a link.
 
-`POST` cannot use the browser `EventSource` API (no request body). The Phase 4
-widget — and the Step 8 browser check — read the stream with `fetch` +
-`ReadableStream`.
+`POST` cannot use the browser `EventSource` API (no request body). The widget
+reads the stream with `fetch` + `ReadableStream`
+(`widget/src/shared/api/sse.ts`).
 
 ## SSE protocol — `POST /api/v1/chat` (public)
 
@@ -213,10 +213,9 @@ This is a **prompt-level wire convention**, not a schema or SSE change.
 other half of the contract — if the model ignores the format, the feature
 degrades to a normal chat answer (no "Walk me through it" button).
 
-Widget inventory (store, layer mount, auto-advance):
-[`01-architecture-overview.md`](01-architecture-overview.md#widget-feature-inventory--guided-walkthroughs).
-`03-widget.md` is still reserved/missing; when it lands, this section stays
-here (prompt ownership) and the widget half moves there.
+Widget half (parser, overlay, auto-advance):
+[`03-widget.md`](03-widget.md#guided-walkthroughs).
+This section stays here because the prompt is backend-owned.
 
 For how-to questions, `ANSWER_SYSTEM` instructs the model to answer as a
 numbered list — `1.` / `2.` … — one UI action per line, at most ONE element

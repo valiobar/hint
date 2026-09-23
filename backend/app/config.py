@@ -27,6 +27,19 @@ class Settings(BaseSettings):
     admin_email: str = "admin@hint.local"
     admin_password: str = ""  # empty → admin seeding skipped, login always 401
 
+    # Multi-user auth. Empty Google client id → /auth/google/* returns 503.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
+    admin_ui_url: str = "http://localhost:3001"  # SPA origin after OAuth / checkout
+
+    # Polar billing. Empty access token → billing endpoints return 503.
+    polar_access_token: str = ""
+    polar_webhook_secret: str = ""
+    polar_environment: str = "sandbox"  # "sandbox" | "production"
+    polar_product_id_basic: str = ""
+    polar_product_id_pro: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

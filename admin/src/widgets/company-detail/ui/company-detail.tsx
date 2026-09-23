@@ -5,8 +5,11 @@ import { EmbedSnippet } from '@/features/copy-embed-snippet';
 import { SuggestedQuestionsForm } from '@/features/edit-suggested-questions';
 import { FileDropzone } from '@/features/upload-documents';
 import { UrlSourceForm } from '@/features/add-url-source';
-import { useAdminStore } from '@/shared/store/admin-store';
-import { EmptyState, Spinner, StatusPill } from '@/shared/ui';
+import {
+	selectCanIngestUrls,
+	useAdminStore,
+} from '@/shared/store/admin-store';
+import { Button, EmptyState, Spinner, StatusPill } from '@/shared/ui';
 import { formatBytes } from '@/shared/lib/format-bytes';
 import styles from './company-detail.module.css';
 
@@ -28,6 +31,7 @@ export const CompanyDetail = () => {
 			uploadingFiles: s.uploadingFiles,
 		})),
 	);
+	const canIngestUrls = useAdminStore(selectCanIngestUrls);
 
 	if (!company) {
 		return null;
@@ -55,7 +59,23 @@ export const CompanyDetail = () => {
 					ground chat, hover hints, and walkthroughs for this company.
 				</p>
 				<FileDropzone />
-				<UrlSourceForm />
+				{canIngestUrls ? (
+					<UrlSourceForm />
+				) : (
+					<div className={styles.proHint} data-testid="url-pro-hint">
+						<p>
+							URL ingestion is a <strong>Pro</strong> feature.
+						</p>
+						<Button
+							variant="ghost"
+							onClick={() =>
+								useAdminStore.setState({ showBilling: true })
+							}
+						>
+							Upgrade
+						</Button>
+					</div>
+				)}
 				{isLoadingDocuments && <Spinner />}
 				{documentsError && (
 					<p className={styles.error} role="alert">

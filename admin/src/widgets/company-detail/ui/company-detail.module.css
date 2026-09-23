@@ -64,6 +64,24 @@
 	font-size: 0.9rem;
 }
 
+.proHint {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.proHint p {
+	margin: 0;
+	color: var(--color-text-muted);
+	font-size: 0.9rem;
+}
+
+.proHint strong {
+	color: var(--color-text);
+	font-weight: 750;
+}
+
 .documents {
 	margin: 0;
 	padding: 0;

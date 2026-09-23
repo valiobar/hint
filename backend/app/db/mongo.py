@@ -31,3 +31,6 @@ async def ensure_indexes() -> None:
     await db["documents"].create_index("document_id", unique=True)
     await db["documents"].create_index("company_id")
     await db["users"].create_index("email", unique=True)
+    await db["users"].create_index("user_id", unique=True, sparse=True)
+    await db["users"].create_index("google_sub", unique=True, sparse=True)
+    await db["companies"].create_index("owner_id")
