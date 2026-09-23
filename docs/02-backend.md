@@ -55,7 +55,9 @@ Cross-cutting rules:
     widget path).
   - `require_url_ingestion` — 403 when the caller's plan does not include URL ingest.
   - `require_openai_key` — 503 with an actionable message when `OPENAI_API_KEY` is empty
-    (the stack boots without it; ingestion, `/retrieve`, `/chat`, and `/hint` need it).
+    (the stack boots without it; ingestion and `/retrieve` need it for embeddings).
+  - `require_chat_credentials` — same OpenAI 503, plus 503 when `LLM_PROVIDER=deepseek`
+    and `DEEPSEEK_API_KEY` is empty (`/chat` and `/hint`).
   - `get_billing_service` — 503 when `POLAR_ACCESS_TOKEN` is empty (checkout, portal,
     and the webhook all go through it). The stack still boots.
 
@@ -360,10 +362,11 @@ Streams tokens over `text/event-stream`. The widget and curl both use POST +
 a readable stream — browsers cannot use `EventSource` (no request body).
 Runtime details: [`06-ai-layer.md`](06-ai-layer.md).
 
-A real `OPENAI_API_KEY` is required. Caps are enforced by Pydantic before any
-LLM spend (≤ 60 interactive elements, ≤ 2000-char excerpt, 1–30 messages,
-1–4000 chars per message). `role` is `user` or `assistant` only — the system
-prompt is backend-owned.
+A real `OPENAI_API_KEY` is required for query embeddings. Chat generation
+also needs `DEEPSEEK_API_KEY` when `LLM_PROVIDER=deepseek` (the default).
+Caps are enforced by Pydantic before any LLM spend (≤ 60 interactive
+elements, ≤ 2000-char excerpt, 1–30 messages, 1–4000 chars per message).
+`role` is `user` or `assistant` only — the system prompt is backend-owned.
 
 ```json
 // Request
@@ -411,7 +414,8 @@ data: {"sources": ["https://support.example.com/reset-password", "user-manual.pd
 |---|---|---|
 | 404 | `Unknown company_id` | Body `company_id` is not in Mongo. Raised before the stream starts |
 | 422 | FastAPI validation | Caps exceeded, empty `messages`, invalid `role`, etc. |
-| 503 | `OPENAI_API_KEY is not configured; set it in .env and restart` | Empty key (router-level `require_openai_key`) |
+| 503 | `OPENAI_API_KEY is not configured; set it in .env and restart` | Empty OpenAI key (router-level `require_chat_credentials`) |
+| 503 | `DEEPSEEK_API_KEY is not configured; set it in .env and restart` | `LLM_PROVIDER=deepseek` and the key is empty |
 
 Empty KB: the model is told the docs do not cover it; `done` still fires with
 `"sources": []`. Follow-ups are rewritten into a standalone query
@@ -459,7 +463,8 @@ hovers are free. Cache recipe / TTL / eviction:
 |---|---|---|
 | 404 | `Unknown company_id` | Body `company_id` is not in Mongo. Cache is not consulted |
 | 422 | FastAPI validation | Caps exceeded / missing `element` / invalid body |
-| 503 | `OPENAI_API_KEY is not configured; set it in .env and restart` | Empty key |
+| 503 | `OPENAI_API_KEY is not configured; set it in .env and restart` | Empty OpenAI key (router-level `require_chat_credentials`) |
+| 503 | `DEEPSEEK_API_KEY is not configured; set it in .env and restart` | `LLM_PROVIDER=deepseek` and the key is empty |
 
 Identical second request (same company, URL **path**, selector, element text)
 returns the same JSON from cache — typically tens of milliseconds, no LLM
@@ -683,11 +688,12 @@ company's chunks.
 
 ## End-to-end curl walkthrough
 
-Prerequisite: `OPENAI_API_KEY` set in `.env`, stack up. The superadmin curl
-path also needs `ADMIN_PASSWORD`. The self-service path below needs Polar
-(`POLAR_ACCESS_TOKEN`, both product ids, webhook secret) and a public tunnel
-so Polar can POST the webhook. A real OpenAI key is required for upload,
-`/retrieve`, `/chat`, and `/hint`. The browser path (superadmin login →
+Prerequisite: `OPENAI_API_KEY` and `DEEPSEEK_API_KEY` set in `.env`, stack up.
+The superadmin curl path also needs `ADMIN_PASSWORD`. The self-service path
+below needs Polar (`POLAR_ACCESS_TOKEN`, both product ids, webhook secret)
+and a public tunnel so Polar can POST the webhook. A real OpenAI key is
+required for upload and `/retrieve`. Chat and hint also need a DeepSeek key
+when `LLM_PROVIDER=deepseek`. The browser path (superadmin login →
 create → upload → copy snippet) is in the README and
 [`04-admin.md`](04-admin.md); this is the debug path. Chat/hint runtime:
 [`06-ai-layer.md`](06-ai-layer.md).
@@ -815,7 +821,7 @@ curl -s -X POST localhost:8000/api/v1/retrieve \
 # → {"chunks":[{"text":"…export…","filename":"user-manual.pdf","source_url":null,"score":0.31}, …]}
 
 # 5. chat streams tokens over SSE (-N disables curl buffering)
-#    Requires a real OPENAI_API_KEY. Public — no token.
+#    Requires OPENAI_API_KEY (embeddings) and DEEPSEEK_API_KEY (generation). Public — no token.
 PAGE_CTX='{"url":"https://app.acme.com/reports","title":"Reports",
   "headings":["Reports"],"visible_text_excerpt":"Monthly reports overview",
   "interactive":[{"tag":"button","text":"Export report","role":null,
@@ -885,6 +891,7 @@ curl -s -X POST localhost:8000/api/v1/hint \
 | `503` on `/billing/*` or `/webhooks/polar` | `POLAR_ACCESS_TOKEN` empty | Set it in `.env`, restart. The rest of the API still boots |
 | `401 {"detail":"Invalid or expired token - sign in again"}` | Expired / tampered JWT, or `JWT_SECRET` changed | Login again |
 | `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` on upload / retrieve / chat / hint | Empty `OPENAI_API_KEY` | Stack boots fine (Phase 0 behavior preserved); set the key in `.env`, `docker compose up -d` |
+| `503 {"detail":"DEEPSEEK_API_KEY is not configured; set it in .env and restart"}` on chat / hint | `LLM_PROVIDER=deepseek` and empty `DEEPSEEK_API_KEY` | Upload and `/retrieve` still work; set the DeepSeek key for generation |
 | Chat stream ends with `event: error` | LLM/network failure after tokens were sent | HTTP status stays 200; treat the assistant message as failed. See [`06-ai-layer.md`](06-ai-layer.md#failure-modes) |
 | Hint `source: null` / chat `done` with `"sources":[]` | Company exists, no ready documents | Expected empty-KB path — model uses the page/label, not invented features |
 | Upload returns `status: "failed"`, error "No extractable text (scanned PDF or empty file)" | Scanned/image-only PDF, or empty file | Expected — no OCR in the POC; response is still 201 with per-file status |

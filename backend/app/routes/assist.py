@@ -11,12 +11,12 @@ from app.routes.deps import (
     get_company_repo,
     get_hint_cache,
     get_retrieval_service,
-    require_openai_key,
+    require_chat_credentials,
 )
 from app.services.hint_cache import HintCache
 from app.services.retrieval_service import RetrievalService
 
-router = APIRouter(tags=["assist"], dependencies=[Depends(require_openai_key)])
+router = APIRouter(tags=["assist"], dependencies=[Depends(require_chat_credentials)])
 
 
 @router.post("/chat")

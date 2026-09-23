@@ -62,7 +62,8 @@ SSH in with your own key (`~/.ssh/digitalocean`), not a key from this repo.
    #   JWT_SECRET          — long random string (not the example value)
    #   ADMIN_PASSWORD      — preset admin login
    #   ADMIN_EMAIL         — default admin@hint.local
-   #   OPENAI_API_KEY      — required for upload / retrieve / chat / hint
+   #   OPENAI_API_KEY      — required for upload / retrieve / embeddings
+   #   DEEPSEEK_API_KEY    — required for /chat /hint when LLM_PROVIDER=deepseek (default)
    #   IMAGE_TAG=latest    — CI overwrites this with the git SHA
    #
    # Optional — forwarded into the backend container. Empty keeps the code defaults.
@@ -153,9 +154,11 @@ IMAGE_TAG=<sha-or-latest> bash deploy.sh
 |---|---|
 | `JWT_SECRET` | Admin JWT signing; must not be an example placeholder |
 | `ADMIN_PASSWORD` | Empty disables login entirely |
-| `OPENAI_API_KEY` | Upload / retrieve / chat / hint return 503 without it |
+| `OPENAI_API_KEY` | Upload / retrieve / chat / hint return 503 without it (embeddings) |
 
-See `.env.example` for optional `LLM_*`, `EMBEDDING_MODEL`, cache, and `ADMIN_EMAIL`.
+`DEEPSEEK_API_KEY` is required for `/chat` and `/hint` when `LLM_PROVIDER=deepseek` (the default). Compose forwards it; `deploy.sh` does not fail the deploy if it is empty.
+
+See `.env.example` for optional `LLM_*`, `DEEPSEEK_*`, `EMBEDDING_MODEL`, cache, and `ADMIN_EMAIL`.
 
 ### Optional Google and Polar keys (forwarded; not validated)
 

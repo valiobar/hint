@@ -12,8 +12,11 @@ class Settings(BaseSettings):
     chroma_port: int = 8000
 
     openai_api_key: str = ""  # required from Phase 1; empty allows Phase 0 boot
-    llm_provider: str = "openai"  # "anthropic" reserved for later
-    llm_model: str = "gpt-4o-mini"
+    llm_provider: str = "deepseek"  # "deepseek" | "openai"
+    llm_model: str = "gpt-4o-mini"  # used only when llm_provider == "openai"
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-flash"
+    deepseek_base_url: str = "https://api.deepseek.com"
     embedding_model: str = "text-embedding-3-small"
     hint_cache_ttl_seconds: int = 3600
     hint_cache_max_entries: int = 1024
