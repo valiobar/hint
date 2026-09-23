@@ -115,9 +115,12 @@ env vars and `.env` for local non-Docker runs). Template: `.env.example`.
 | `MONGODB_DB_NAME` | `hint`                           | `hint`                            | backend     |
 | `CHROMA_HOST`     | `localhost`                         | `chromadb`                           | backend     |
 | `CHROMA_PORT`     | `8000`                              | `8000`                               | backend     |
-| `OPENAI_API_KEY`  | `""` — empty still allows boot      | `${OPENAI_API_KEY:-}` from `.env`    | backend — **required** for upload, `/retrieve`, `/chat`, `/hint` (503 without it) |
-| `LLM_PROVIDER`    | `openai`                            | not overridden (code default)        | backend — `create_chat_llm`; unknown value raises at first LLM call |
-| `LLM_MODEL`       | `gpt-4o-mini`                       | `${LLM_MODEL:-gpt-4o-mini}`          | backend chat / hint model |
+| `OPENAI_API_KEY`  | `""` — empty still allows boot      | `${OPENAI_API_KEY:-}` from `.env`    | backend — **required** for upload, `/retrieve`, `/chat`, `/hint` embeddings (503 without it) |
+| `LLM_PROVIDER`    | `deepseek`                          | `${LLM_PROVIDER:-deepseek}`          | backend — `create_chat_llm`; `deepseek` or `openai`; unknown value raises at first LLM call |
+| `LLM_MODEL`       | `gpt-4o-mini`                       | `${LLM_MODEL:-gpt-4o-mini}`          | backend — OpenAI chat / hint model (`LLM_PROVIDER=openai` only) |
+| `DEEPSEEK_API_KEY` | `""`                               | `${DEEPSEEK_API_KEY:-}` from `.env`  | backend — **required** for `/chat` and `/hint` when `LLM_PROVIDER=deepseek` |
+| `DEEPSEEK_MODEL`  | `deepseek-flash`                    | `${DEEPSEEK_MODEL:-deepseek-flash}`  | backend chat / hint model (default provider) |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com`        | `${DEEPSEEK_BASE_URL:-https://api.deepseek.com}` | backend DeepSeek OpenAI-compatible endpoint |
 | `HINT_CACHE_TTL_SECONDS` | `3600`                       | not overridden (code default)        | backend in-process hint cache TTL |
 | `HINT_CACHE_MAX_ENTRIES` | `1024`                       | not overridden (code default)        | backend hint cache cap (oldest-first eviction) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small`            | `${EMBEDDING_MODEL:-…}`              | backend (Phase 1) |
@@ -187,7 +190,7 @@ Full inventory: [`02-backend.md`](02-backend.md), [`03-widget.md`](03-widget.md)
 
 ```bash
 cp .env.example .env
-# set OPENAI_API_KEY (upload / retrieve / chat / hint) and ADMIN_PASSWORD (superadmin login)
+# set OPENAI_API_KEY (upload / retrieve / embeddings), DEEPSEEK_API_KEY (chat / hint), and ADMIN_PASSWORD
 # Google + Polar are optional at boot (those routes 503 until set) — README checklist
 docker compose up --build
 
@@ -200,7 +203,7 @@ open http://localhost:3002    # demo page — Hint guide bar at the bottom of th
 
 Primary operator walkthrough: [`04-admin.md`](04-admin.md) and the README.
 Curl/debug path (login first, then bearer on admin routes; chat/hint are public
-and need a real `OPENAI_API_KEY`):
+and need a real `OPENAI_API_KEY` plus `DEEPSEEK_API_KEY` for chat / hint):
 [`02-backend.md`](02-backend.md#end-to-end-curl-walkthrough).
 AI runtime: [`06-ai-layer.md`](06-ai-layer.md).
 
