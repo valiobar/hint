@@ -112,6 +112,7 @@ jobs:
           build-args: |
             VITE_API_URL=${{ (matrix.service == 'admin' || matrix.service == 'demo') && secrets.VITE_API_URL || '' }}
             VITE_WIDGET_CDN_URL=${{ (matrix.service == 'admin' || matrix.service == 'demo') && secrets.VITE_WIDGET_CDN_URL || '' }}
+            DEMO_COMPANY_ID=${{ matrix.service == 'demo' && 'cmp_064296e3' || 'cmp_YOUR_ID' }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/hint-${{ matrix.service }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/hint-${{ matrix.service }}:latest

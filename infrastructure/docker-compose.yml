@@ -106,6 +106,7 @@ services:
       args:
         VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}"
         VITE_WIDGET_CDN_URL: "${VITE_WIDGET_CDN_URL:-http://localhost:1337}"
+        DEMO_COMPANY_ID: "${DEMO_COMPANY_ID:-cmp_YOUR_ID}"
     container_name: hint-demo
     ports: ["3002:80"]
     depends_on: [widget-cdn]
