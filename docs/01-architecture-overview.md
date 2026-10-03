@@ -121,6 +121,10 @@ env vars and `.env` for local non-Docker runs). Template: `.env.example`.
 | `DEEPSEEK_API_KEY` | `""`                               | `${DEEPSEEK_API_KEY:-}` from `.env`  | backend — **required** for `/chat` and `/hint` when `LLM_PROVIDER=deepseek` |
 | `DEEPSEEK_MODEL`  | `deepseek-flash`                    | `${DEEPSEEK_MODEL:-deepseek-flash}`  | backend chat / hint model (default provider) |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com`        | `${DEEPSEEK_BASE_URL:-https://api.deepseek.com}` | backend DeepSeek OpenAI-compatible endpoint |
+| `LANGFUSE_ENABLED` | `false`                         | `${LANGFUSE_ENABLED:-false}`     | backend `ai/observability.py` — `true` traces `/chat` and `/hint`; off or missing keys is a no-op |
+| `LANGFUSE_PUBLIC_KEY` | `""`                         | `${LANGFUSE_PUBLIC_KEY:-}`       | backend — `pk-lf-…`; never committed. Empty → tracing off |
+| `LANGFUSE_SECRET_KEY` | `""`                         | `${LANGFUSE_SECRET_KEY:-}`       | backend — `sk-lf-…`; never committed. Empty → tracing off |
+| `LANGFUSE_HOST`   | `https://cloud.langfuse.com`        | `${LANGFUSE_HOST:-https://cloud.langfuse.com}` | backend Langfuse Cloud host (EU) |
 | `HINT_CACHE_TTL_SECONDS` | `3600`                       | not overridden (code default)        | backend in-process hint cache TTL |
 | `HINT_CACHE_MAX_ENTRIES` | `1024`                       | not overridden (code default)        | backend hint cache cap (oldest-first eviction) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small`            | `${EMBEDDING_MODEL:-…}`              | backend (Phase 1) |

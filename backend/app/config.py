@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     polar_product_id_basic: str = ""
     polar_product_id_pro: str = ""
 
+    # Langfuse observability (staging-first; tracing only, never billing)
+    langfuse_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
 
 @lru_cache
 def get_settings() -> Settings:

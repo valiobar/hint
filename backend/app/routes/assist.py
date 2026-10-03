@@ -5,6 +5,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.ai.chat_graph import ANSWER_NODE, RETRIEVE_NODE, build_chat_graph
 from app.ai.hint_chain import generate_hint
+from app.ai.observability import trace_config
 from app.models.assist import ChatRequest, HintRequest, HintResponse
 from app.repositories.company_repo import CompanyRepository
 from app.routes.deps import (
@@ -30,6 +31,7 @@ async def chat(
         raise HTTPException(status_code=404, detail="Unknown company_id")
 
     graph = build_chat_graph(retrieval)
+    config = trace_config(name="chat", company_id=body.company_id)
     initial_state = {
         "company_id": body.company_id,
         "company_name": company.name,
@@ -43,7 +45,11 @@ async def chat(
     async def event_stream():
         sources: list[str] = []
         try:
-            async for event in graph.astream_events(initial_state, version="v2"):
+            async for event in graph.astream_events(
+                initial_state,
+                version="v2",
+                **({"config": config} if config else {}),
+            ):
                 kind = event["event"]
                 if (
                     kind == "on_chat_model_stream"
