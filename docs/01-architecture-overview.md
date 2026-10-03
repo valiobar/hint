@@ -7,7 +7,9 @@
 > [`02-backend.md`](02-backend.md).
 > AI runtime (LangGraph chat + hints): [`06-ai-layer.md`](06-ai-layer.md).
 > Admin SPA: [`04-admin.md`](04-admin.md). Auth contract:
-> [`05-auth.md`](05-auth.md). Widget (embed, FSD, store, chat, hints,
+> [`05-auth.md`](05-auth.md). User management + billing + usage metering:
+> [`07-user-management-and-billing.md`](07-user-management-and-billing.md).
+> Widget (embed, FSD, store, chat, hints,
 > walkthroughs): [`03-widget.md`](03-widget.md).
 > Tester playthrough: [`HOW_TO_PLAY.md`](HOW_TO_PLAY.md).
 
@@ -22,7 +24,7 @@ those docs plus the current page context.
 | Service      | Tech                              | Port (host) | Purpose                                                  |
 |--------------|-----------------------------------|-------------|----------------------------------------------------------|
 | `backend`    | Python 3.12, FastAPI, uvicorn     | 8000        | API: auth, Polar billing, companies, document ingestion, retrieval, chat (SSE), hints ([`02-backend.md`](02-backend.md), [`05-auth.md`](05-auth.md), [`06-ai-layer.md`](06-ai-layer.md)) |
-| `mongo`      | `mongo:7`                         | —           | `companies` (with `owner_id`), `documents` metadata, `users` (superadmin seed + registered users, plan on the user doc) |
+| `mongo`      | `mongo:7`                         | —           | `companies` (with `owner_id`), `documents` metadata, `users` (superadmin seed + registered users, plan on the user doc), `usage_events` (metered LLM spend) |
 | `chromadb`   | `chromadb/chroma:0.5.23`          | —           | Per-company vector collections `kb_{company_id}`          |
 | `admin`      | React 18 + Vite + TS → nginx      | 3001        | Admin panel: sign-up, Google, Polar billing, companies, upload, snippet ([`04-admin.md`](04-admin.md)) |
 | `widget-cdn` | nginx (multi-stage pnpm build)    | 1337        | Serves `loader.js` + hashed `hint-widget.{hash}.js` under `/embed/v1/` |
@@ -140,6 +142,10 @@ env vars and `.env` for local non-Docker runs). Template: `.env.example`.
 | `POLAR_WEBHOOK_SECRET` | `""`                         | `${POLAR_WEBHOOK_SECRET:-}`  | webhook signature check |
 | `POLAR_ENVIRONMENT` | `sandbox`                     | `${POLAR_ENVIRONMENT:-sandbox}` | `sandbox` or production server |
 | `POLAR_PRODUCT_ID_BASIC` / `POLAR_PRODUCT_ID_PRO` | `""` | from `.env` | Checkout products; webhook maps each id to `basic` or `pro` and skips the plan write if neither matches |
+| `USAGE_BILLING_MARKUP` | `1.3` | not overridden (code default) | Multiplier: raw model cost → `billable_usd` on each usage event |
+| `PRICING_LIVE_ENABLED` | `false` | `${PRICING_LIVE_ENABLED:-false}` | `true` → daily live refresh of flat-model prices; DeepSeek peak/off-peak is always on |
+| `PRICING_SOURCE_URL` | LiteLLM raw JSON | `${PRICING_SOURCE_URL:-…}` | Dataset fetched when live pricing is on |
+| `PRICING_REFRESH_TTL_SECONDS` | `86400` | `${PRICING_REFRESH_TTL_SECONDS:-86400}` | In-process price cache TTL (no Redis) |
 
 Admin build-time variables (Vite, baked into the bundle via Docker build args in compose):
 

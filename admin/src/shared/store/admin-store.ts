@@ -10,8 +10,9 @@ import {
 	login as apiLogin,
 	register as apiRegister,
 	fetchMe,
+	getUsage,
 } from '@/shared/api';
-import type { Company, DocumentMeta, Me } from '@/shared/api';
+import type { Company, DocumentMeta, Me, UsageSummary } from '@/shared/api';
 import { toErrorMessage } from '@/shared/lib/error-message';
 import {
 	clearSession,
@@ -35,6 +36,9 @@ interface AdminState {
 	checkoutPending: boolean;
 	/** Sidebar "Billing" opens the plan cards in the main pane. */
 	showBilling: boolean;
+	usage: UsageSummary | null;
+	isLoadingUsage: boolean;
+	usageError: string | null;
 	companies: Company[];
 	isLoadingCompanies: boolean;
 	companiesError: string | null;
@@ -53,6 +57,7 @@ interface AdminState {
 	refreshMe: () => Promise<Me | null>;
 	logout: () => void;
 	restoreSession: () => Promise<void>;
+	loadUsage: () => Promise<void>;
 	loadCompanies: () => Promise<void>;
 	createCompany: (name: string) => Promise<void>;
 	selectCompany: (companyId: string) => Promise<void>;
@@ -90,6 +95,9 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 	authError: null,
 	checkoutPending: false,
 	showBilling: false,
+	usage: null,
+	isLoadingUsage: false,
+	usageError: null,
 	companies: [],
 	isLoadingCompanies: false,
 	companiesError: null,
@@ -152,6 +160,9 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			authError: null,
 			checkoutPending: false,
 			showBilling: false,
+			usage: null,
+			isLoadingUsage: false,
+			usageError: null,
 			companies: [],
 			companiesError: null,
 			selectedCompanyId: null,
@@ -177,6 +188,17 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 			await get().loadCompanies();
 		} catch {
 			get().logout();
+		}
+	},
+
+	loadUsage: async () => {
+		set({ isLoadingUsage: true, usageError: null });
+		try {
+			set({ usage: await getUsage() });
+		} catch (err) {
+			set({ usageError: toErrorMessage(err) });
+		} finally {
+			set({ isLoadingUsage: false });
 		}
 	},
 

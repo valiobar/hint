@@ -182,6 +182,7 @@ is `element.text or ""` (aria-label is **not** part of the key).
 | Cap | `HINT_CACHE_MAX_ENTRIES=1024` | Inserting a **new** key at capacity evicts the oldest entry (`popitem(last=False)`). Updates of an existing key do not evict. |
 | Scope | per process | Restart empties the cache. Not shared across replicas. |
 | Racing identical hovers | accepted | Two concurrent misses both call the LLM; last `set` wins. No per-key lock in the POC. |
+| Usage | cache hit writes nothing | A hit spent no tokens, so `UsageService.record` is skipped. A miss is metered after the LLM call. |
 
 Cache is checked **after** the 404 company lookup, so unknown companies never
 poison the store.

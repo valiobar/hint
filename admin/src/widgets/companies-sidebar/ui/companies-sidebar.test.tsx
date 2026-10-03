@@ -10,7 +10,7 @@ const me = (overrides: Partial<Me> = {}): Me => ({
 	created_at: '2026-01-01T00:00:00Z',
 	plan: 'basic',
 	subscription_status: 'active',
-	limits: { max_companies: 1, url_ingestion: false },
+	limits: { max_companies: 1, url_ingestion: false, monthly_cost_usd: 5 },
 	...overrides,
 });
 
@@ -44,7 +44,7 @@ it('keeps the create form under the limit and hides upgrade on Pro', () => {
 	useAdminStore.setState({
 		me: me({
 			plan: 'pro',
-			limits: { max_companies: 10, url_ingestion: true },
+			limits: { max_companies: 10, url_ingestion: true, monthly_cost_usd: 50 },
 		}),
 		companies: [company('co_1')],
 		isLoadingCompanies: false,
@@ -102,7 +102,7 @@ it('hides billing for a superadmin and asks a new user to subscribe', () => {
 			role: 'superadmin',
 			plan: null,
 			subscription_status: null,
-			limits: { max_companies: 10000, url_ingestion: true },
+			limits: { max_companies: 10000, url_ingestion: true, monthly_cost_usd: -1 },
 		}),
 		companies: [],
 		isLoadingCompanies: false,
@@ -123,7 +123,7 @@ it('hides billing for a superadmin and asks a new user to subscribe', () => {
 		me: me({
 			plan: null,
 			subscription_status: null,
-			limits: { max_companies: 0, url_ingestion: false },
+			limits: { max_companies: 0, url_ingestion: false, monthly_cost_usd: 0 },
 		}),
 		companies: [],
 	});

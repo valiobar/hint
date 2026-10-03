@@ -17,7 +17,7 @@ const me = (overrides: Partial<Me> = {}): Me => ({
 	created_at: '2026-01-01T00:00:00Z',
 	plan: 'basic',
 	subscription_status: 'active',
-	limits: { max_companies: 1, url_ingestion: false },
+	limits: { max_companies: 1, url_ingestion: false, monthly_cost_usd: 5 },
 	...overrides,
 });
 
@@ -47,7 +47,7 @@ it('shows the URL form when the plan allows ingestion', () => {
 	useAdminStore.setState({
 		me: me({
 			plan: 'pro',
-			limits: { max_companies: 10, url_ingestion: true },
+			limits: { max_companies: 10, url_ingestion: true, monthly_cost_usd: 50 },
 		}),
 		companies: [company],
 		selectedCompanyId: company.company_id,

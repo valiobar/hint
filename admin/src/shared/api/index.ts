@@ -14,7 +14,8 @@ export type {
 	SubscriptionStatus,
 } from '@/shared/api/auth';
 export { fetchMe, googleLoginUrl, login, register } from '@/shared/api/auth';
-export { createCheckout, getPortalUrl } from '@/shared/api/billing';
+export type { UsageSummary } from '@/shared/api/billing';
+export { createCheckout, getPortalUrl, getUsage } from '@/shared/api/billing';
 export {
 	listCompanies,
 	createCompany,

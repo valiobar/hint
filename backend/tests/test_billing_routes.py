@@ -6,8 +6,14 @@ from polar_sdk.webhooks import WebhookVerificationError
 
 from app.config import Settings
 from app.main import app
+from app.models.usage import UsageSummary
 from app.models.user import UserInDB
-from app.routes.deps import get_auth_service, get_billing_service, require_user
+from app.routes.deps import (
+    get_auth_service,
+    get_billing_service,
+    get_usage_service,
+    require_user,
+)
 
 
 def _user(**overrides) -> UserInDB:
@@ -147,6 +153,40 @@ def test_webhook_bad_signature_is_403() -> None:
         res = TestClient(app).post("/api/v1/webhooks/polar", content=b"{}")
         assert res.status_code == 403
         assert res.json()["detail"] == "Invalid webhook signature"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_usage_returns_allowance_used_overage() -> None:
+    period_start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    period_end = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    summary = UsageSummary(
+        period_start=period_start,
+        period_end=period_end,
+        allowance_usd=50.0,
+        used_usd=62.5,
+        overage_usd=12.5,
+        pricing_tier="offpeak",
+    )
+
+    class FakeUsageService:
+        async def summary_for_user(self, user: UserInDB) -> UsageSummary:
+            assert user.user_id == "usr_aaa11111"
+            return summary
+
+    _override_user(_user())
+    app.dependency_overrides[get_usage_service] = lambda: FakeUsageService()
+    try:
+        res = TestClient(app).get("/api/v1/billing/usage")
+        assert res.status_code == 200
+        assert res.json() == {
+            "period_start": "2026-09-01T00:00:00Z",
+            "period_end": "2026-10-01T00:00:00Z",
+            "allowance_usd": 50.0,
+            "used_usd": 62.5,
+            "overage_usd": 12.5,
+            "pricing_tier": "offpeak",
+        }
     finally:
         app.dependency_overrides.clear()
 

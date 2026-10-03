@@ -38,6 +38,7 @@ class UserInDB(BaseModel):
     subscription_status: SubscriptionStatus | None = None
     polar_customer_id: str | None = None
     polar_subscription_id: str | None = None
+    current_period_start: datetime | None = None
     current_period_end: datetime | None = None
 
     @property

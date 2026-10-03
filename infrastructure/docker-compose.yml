@@ -66,6 +66,9 @@ services:
       - POLAR_ENVIRONMENT=${POLAR_ENVIRONMENT:-sandbox}
       - POLAR_PRODUCT_ID_BASIC=${POLAR_PRODUCT_ID_BASIC:-}
       - POLAR_PRODUCT_ID_PRO=${POLAR_PRODUCT_ID_PRO:-}
+      - PRICING_LIVE_ENABLED=${PRICING_LIVE_ENABLED:-false}
+      - PRICING_SOURCE_URL=${PRICING_SOURCE_URL:-https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json}
+      - PRICING_REFRESH_TTL_SECONDS=${PRICING_REFRESH_TTL_SECONDS:-86400}
     depends_on:
       mongo:
         condition: service_healthy

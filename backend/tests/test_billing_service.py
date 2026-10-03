@@ -49,6 +49,7 @@ def _event(
     user_id: str | None = "usr_aaa11111",
     product_id: str | None = "prod_basic",
     status: str = "trialing",
+    period_start: datetime | None = None,
     period_end: datetime | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
@@ -58,6 +59,7 @@ def _event(
             status=status,
             product_id=product_id,
             customer_id="cus_1",
+            current_period_start=period_start,
             current_period_end=period_end or datetime(2026, 10, 1, tzinfo=timezone.utc),
             customer=SimpleNamespace(external_id=user_id),
         ),
@@ -97,10 +99,11 @@ async def test_create_portal_returns_customer_portal_url() -> None:
 async def test_apply_webhook_writes_subscription_fields() -> None:
     repo = FakeUserRepo()
     svc = _svc(repo)
+    period_start = datetime(2026, 9, 1, tzinfo=timezone.utc)
     period_end = datetime(2026, 10, 1, tzinfo=timezone.utc)
     with patch(
         "app.services.billing_service.validate_event",
-        return_value=_event(period_end=period_end),
+        return_value=_event(period_start=period_start, period_end=period_end),
     ):
         await svc.apply_webhook(b"{}", {"webhook-id": "1"})
     assert repo.updates == [
@@ -111,6 +114,7 @@ async def test_apply_webhook_writes_subscription_fields() -> None:
                 "subscription_status": "trialing",
                 "polar_customer_id": "cus_1",
                 "polar_subscription_id": "sub_1",
+                "current_period_start": period_start,
                 "current_period_end": period_end,
             },
         )

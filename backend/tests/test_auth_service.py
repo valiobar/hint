@@ -1,10 +1,15 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.config import Settings
-from app.models.billing import NO_PLAN_LIMITS, PLAN_LIMITS, SUPERADMIN_LIMITS
+from app.models.billing import (
+    NO_PLAN_LIMITS,
+    PLAN_LIMITS,
+    SUPERADMIN_LIMITS,
+    billing_period,
+)
 from app.models.user import UserInDB
 from app.routes.deps import resolve_limits
 from app.services.auth_service import (
@@ -228,3 +233,26 @@ def test_resolve_limits_by_role_and_subscription() -> None:
         == NO_PLAN_LIMITS
     )
     assert resolve_limits(_user()) == NO_PLAN_LIMITS
+
+
+def test_billing_period_prefers_stored_window() -> None:
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    assert billing_period(
+        _user(current_period_start=start, current_period_end=end)
+    ) == (start, end)
+
+
+def test_billing_period_falls_back_to_thirty_days_before_end() -> None:
+    end = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    assert billing_period(_user(current_period_end=end)) == (
+        end - timedelta(days=30),
+        end,
+    )
+
+
+def test_billing_period_uses_calendar_month_without_polar_dates() -> None:
+    start, end = billing_period(_user())
+    assert start == end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    assert end.tzinfo == timezone.utc
+    assert (datetime.now(timezone.utc) - end).total_seconds() < 5

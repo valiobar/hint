@@ -11,6 +11,7 @@ def test_deepseek_builds_flash_client(monkeypatch) -> None:
     )
     llm = create_chat_llm(max_tokens=80)
     assert llm.model_name == "deepseek-flash"
+    assert llm.stream_usage is True
     base = str(getattr(llm, "openai_api_base", None) or getattr(llm, "base_url", ""))
     assert "api.deepseek.com" in base
     extra_body = getattr(llm, "extra_body", None)
@@ -28,6 +29,7 @@ def test_openai_provider_uses_llm_model(monkeypatch) -> None:
     )
     llm = create_chat_llm()
     assert llm.model_name == "gpt-4o-mini"
+    assert llm.stream_usage is True
     base = getattr(llm, "openai_api_base", None) or getattr(llm, "base_url", None)
     assert base in (None, "")
 

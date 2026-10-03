@@ -11,6 +11,7 @@ _SUBSCRIPTION_FIELDS = frozenset(
         "subscription_status",
         "polar_customer_id",
         "polar_subscription_id",
+        "current_period_start",
         "current_period_end",
     }
 )
@@ -65,6 +66,7 @@ class UserRepository:
             "subscription_status": None,
             "polar_customer_id": None,
             "polar_subscription_id": None,
+            "current_period_start": None,
             "current_period_end": None,
         }
         await self.collection.insert_one(doc)  # DuplicateKeyError → 409 upstream
