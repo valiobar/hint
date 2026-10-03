@@ -33,5 +33,10 @@ async def ensure_indexes() -> None:
     await db["users"].create_index("email", unique=True)
     await db["users"].create_index("user_id", unique=True, sparse=True)
     await db["users"].create_index("google_sub", unique=True, sparse=True)
+    # Explicit null is indexed; drop leftovers so old password rows don't hold the slot.
+    await db["users"].update_many(
+        {"google_sub": {"$type": "null"}},
+        {"$unset": {"google_sub": ""}},
+    )
     await db["companies"].create_index("owner_id")
     await db["usage_events"].create_index([("owner_id", 1), ("created_at", 1)])

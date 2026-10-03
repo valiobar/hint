@@ -36,7 +36,8 @@ cp .env.example .env
 #   ADMIN_PASSWORD   — seeded superadmin login (empty skips that seed only)
 #   OPENAI_API_KEY   — upload, /retrieve, embeddings (503 without it)
 #   DEEPSEEK_API_KEY — /chat, /hint when LLM_PROVIDER=deepseek (default)
-# Google and Polar are optional at boot — see "One-time external setup".
+# Google, Polar, and Langfuse are optional at boot — see "One-time external setup".
+# LANGFUSE_ENABLED=false (or empty keys) leaves /chat and /hint unchanged.
 docker compose up --build
 ```
 
@@ -82,11 +83,43 @@ API shapes: [`docs/02-backend.md`](docs/02-backend.md#register--checkout--webhoo
    `https://<ngrok-host>/api/v1/webhooks/polar`. Copy the signing secret
    to `POLAR_WEBHOOK_SECRET`.
 6. `docker compose up -d backend` so the container re-reads `.env`.
+7. On **each** product (Basic and Pro), add a **metered price** backed by
+   one meter:
+   - Event name: `hint_usage` (what the backend ingests).
+   - Aggregation: **sum** of metadata field `billable_usd`.
+   - Unit price: **$1**.
+   - Included units: the plan allowance — Basic `5`, Pro `50`. Those
+     numbers are `PlanLimits.monthly_cost_usd`.
+   Keep them aligned with `USAGE_BILLING_MARKUP` (code default `1.3`:
+   `billable_usd = raw model cost × 1.3`). The in-app usage bar is an
+   estimate; Polar's invoice is the charge. Compose does not forward
+   `USAGE_BILLING_MARKUP` yet, so the container uses `1.3` until that
+   passthrough is added.
 
 Handled events and the signature check:
 [`docs/02-backend.md`](docs/02-backend.md#post-apiv1webhookspolar--202-signature).
 Empty `POLAR_ACCESS_TOKEN` makes checkout, portal, and the webhook return
-503; the rest of the API stays up.
+503; the rest of the API stays up. Metered ingest is skipped in that case
+too; `/chat` and `/hint` still write the local ledger.
+
+**Langfuse Cloud (optional)**
+
+Tracing for `/chat` and `/hint`. Off by default. Cost figures in the
+Langfuse UI are approximate and are **not** used for billing.
+
+1. Sign up at [cloud.langfuse.com](https://cloud.langfuse.com) (EU region,
+   Hobby).
+2. Create a project named **`hint-staging`**.
+3. Project → Settings → API Keys. Put `pk-lf-…` in `LANGFUSE_PUBLIC_KEY`
+   and `sk-lf-…` in `LANGFUSE_SECRET_KEY`. Set
+   `LANGFUSE_HOST=https://cloud.langfuse.com` and `LANGFUSE_ENABLED=true`.
+4. Keys live only in `.env` (local and the VPS). Never commit them.
+5. `docker compose up -d backend`.
+
+With the flag off, or with either key empty, `/chat` and `/hint` behave
+as they do today and no traces are sent. A hint cache hit sends no trace
+even when tracing is on. Details:
+[`docs/06-ai-layer.md`](docs/06-ai-layer.md#observability-langfuse).
 
 **Google sign-in**
 
@@ -225,14 +258,19 @@ backend; the variables below are the ones you normally set on the host.
 | `POLAR_ACCESS_TOKEN` | `""` | backend | Empty → billing routes and the webhook return 503 |
 | `POLAR_WEBHOOK_SECRET` | `""` | backend | Polar webhook signature |
 | `POLAR_ENVIRONMENT` | `sandbox` | backend | `sandbox` or production |
-| `POLAR_PRODUCT_ID_BASIC` | `""` | backend | Basic product (1 company, files only) |
-| `POLAR_PRODUCT_ID_PRO` | `""` | backend | Pro product (10 companies, files and URLs) |
+| `POLAR_PRODUCT_ID_BASIC` | `""` | backend | Basic product (1 company, files only, $5 included usage) |
+| `POLAR_PRODUCT_ID_PRO` | `""` | backend | Pro product (10 companies, files and URLs, $50 included usage) |
+| `USAGE_BILLING_MARKUP` | `1.3` | backend | `billable_usd = raw model cost × markup`. Code default; compose does not pass it through yet |
 | `OPENAI_API_KEY` | `""` | backend | Required for upload, `/retrieve`, `/chat`, `/hint` embeddings (503 without it); stack boots without it |
 | `LLM_PROVIDER` | `deepseek` | backend | Chat / hint factory (`deepseek` or `openai`); unknown value raises at first LLM call |
 | `LLM_MODEL` | `gpt-4o-mini` | backend | OpenAI chat / hint model (`LLM_PROVIDER=openai` only) |
 | `DEEPSEEK_API_KEY` | `""` | backend | Required for `/chat` and `/hint` when `LLM_PROVIDER=deepseek` |
 | `DEEPSEEK_MODEL` | `deepseek-flash` | backend | Default chat / hint model |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | backend | DeepSeek OpenAI-compatible API |
+| `LANGFUSE_ENABLED` | `false` | backend | `true` traces `/chat` and `/hint`. Off, or empty keys, is a no-op |
+| `LANGFUSE_PUBLIC_KEY` | `""` | backend | `pk-lf-…` from project `hint-staging`. Never commit |
+| `LANGFUSE_SECRET_KEY` | `""` | backend | `sk-lf-…`. Never commit |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | backend | EU Cloud region |
 | `HINT_CACHE_TTL_SECONDS` | `3600` | backend | In-process hint cache TTL (cleared on backend restart) |
 | `HINT_CACHE_MAX_ENTRIES` | `1024` | backend | Hint cache cap (oldest-first eviction) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | backend | Document embeddings |
@@ -328,8 +366,8 @@ Widget + Admin + AI layer are in one runnable POC:
 - **Widget** — Shadow DOM guide bar, streamed chat, empty-state
   starter chips, hover hints, chips, walkthroughs, markdown / copy /
   new chat
-- **Backend** — multi-user auth, Polar plans (Basic / Pro), LangGraph
-  RAG chat (SSE), and cached hover hints
+- **Backend** — multi-user auth, Polar plans (flat fee + metered overage),
+  LangGraph RAG chat (SSE), and cached hover hints
 
 This is still a POC: no OCR, no server-side chat history, hint cache is
 in-process, no refresh tokens. Plan limits apply to registered users;

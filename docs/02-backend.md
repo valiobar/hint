@@ -423,6 +423,11 @@ Empty KB: the model is told the docs do not cover it; `done` still fires with
 `"sources": []`. Follow-ups are rewritten into a standalone query
 (`condense_query`); a single-message request skips that LLM call.
 
+A completed stream writes one `usage_events` row (`kind: "chat"`) before
+`done`. The `error` event writes nothing. `LANGFUSE_ENABLED=false` (the
+default), or empty Langfuse keys, does not change these events. Token
+capture: [`06-ai-layer.md`](06-ai-layer.md#token-usage-capture).
+
 ### POST /api/v1/hint → 200 (public)
 
 One non-streaming LLM call. Retrieval query is
@@ -470,8 +475,14 @@ hovers are free. Cache recipe / TTL / eviction:
 
 Identical second request (same company, URL **path**, selector, element text)
 returns the same JSON from cache — typically tens of milliseconds, no LLM
-tokens. Query-string differences do not bust the cache. Restarting the
-backend empties the store (per-process).
+tokens, and no `usage_events` row. A cache miss writes one `kind: "hint"`
+event after the model returns. A ledger or Polar write failure is logged
+and does not change this JSON. Query-string differences do not bust the
+cache. Restarting the backend empties the store (per-process).
+
+`LANGFUSE_ENABLED=false` (the default), or empty Langfuse keys, does not
+change the hint body. A cache hit also sends no Langfuse trace, because
+the route returns before `generate_hint`.
 
 ### GET /health → 200 | 503
 
@@ -484,27 +495,43 @@ Polar is the merchant of record. Hint stores subscription state on the
 `users` document and never talks to a card form. Trial length is configured
 on the Polar products, not in this repo.
 
+The charge is a **flat plan fee plus metered overage**. Basic and Pro are
+Polar products with a fixed price. Included usage is
+`PlanLimits.monthly_cost_usd` (Basic `5.0`, Pro `50.0`, superadmin `-1`,
+no plan `0.0`). Spend above that allowance is billed as extra units on a
+metered price. Hint's estimate of that overage is `GET /billing/usage`.
+Polar's invoice is the charge. Langfuse cost numbers are not an input.
+
 ```
 Admin / curl  POST /billing/checkout {plan} ──▶ backend ──▶ Polar checkout URL
 User pays on Polar (trial starts there)
 Polar  POST /webhooks/polar (signed) ──▶ users.$set plan + subscription_status
 Client  GET /auth/me ──▶ plan + limits ──▶ POST /companies is allowed
+
+widget  POST /chat (success) or POST /hint (cache miss)
+        ──▶ usage_events row (cost_usd, billable_usd)
+        ──▶ Polar event hint_usage {billable_usd}   (skipped if no access token)
+Invoice = flat product price + ($1 × billable_usd above included units)
 ```
 
 Checkout does not unlock the product by itself. Poll `GET /auth/me` until
 `subscription_status` is `trialing` or `active`. Duplicate webhook deliveries
-are safe: `update_subscription` is an idempotent `$set`.
+are safe: `update_subscription` is an idempotent `$set`. Reaching the
+allowance does not block `/chat` or `/hint`.
 
 ### Plan limits and ownership
 
 `resolve_limits` (`backend/app/models/billing.py`):
 
-| Caller | `max_companies` | `url_ingestion` | Create company | `POST …/from-url` |
-|---|---|---|---|---|
-| No plan, or status not `active` / `trialing` (`canceled`, `revoked`, `past_due`, null) | 0 | false | **402** | **403** |
-| `basic` + `active` or `trialing` | 1 | false | 201, then **403** on the 2nd | **403** |
-| `pro` + `active` or `trialing` | 10 | true | 201 through the 10th; 11th is **403** | 201 |
-| `superadmin` | 10000 | true | 201 (no Polar required) | 201 |
+| Caller | `max_companies` | `url_ingestion` | `monthly_cost_usd` | Create company | `POST …/from-url` |
+|---|---|---|---|---|---|
+| No plan, or status not `active` / `trialing` (`canceled`, `revoked`, `past_due`, null) | 0 | false | `0.0` | **402** | **403** |
+| `basic` + `active` or `trialing` | 1 | false | `5.0` | 201, then **403** on the 2nd | **403** |
+| `pro` + `active` or `trialing` | 10 | true | `50.0` | 201 through the 10th; 11th is **403** | 201 |
+| `superadmin` | 10000 | true | `-1` | 201 (no Polar required) | 201 |
+
+`monthly_cost_usd` is the included usage allowance. `GET /billing/usage`
+copies it onto `allowance_usd`. `-1` means unlimited (overage stays `0`).
 
 402 detail: `An active subscription is required to create companies`.
 403 at the cap: `Your plan allows up to {n} company(ies) — upgrade to Pro for more`.
@@ -567,9 +594,13 @@ Polar meter relationship: [`07-user-management-and-billing.md`](07-user-manageme
 }
 ```
 
-`used_usd` sums `billable_usd` from `usage_events` for the caller's `owner_id`
-over the period (`current_period_start/end`, else `end − 30d`, else the calendar
-month). Errors: `401`. Never 503 — this route does not require Polar.
+`allowance_usd` is `resolve_limits(user).monthly_cost_usd`
+(`PlanLimits.monthly_cost_usd` in `backend/app/models/billing.py`).
+`used_usd` sums `billable_usd` from `usage_events` for the caller's
+`owner_id` over the period (`current_period_start/end`, else `end − 30d`,
+else the calendar month). `overage_usd` is `max(0, used_usd − allowance_usd)`,
+or `0` when `allowance_usd` is `-1`. Errors: `401`. Never 503 — this route
+does not require Polar.
 
 ### POST /api/v1/webhooks/polar → 202 (signature)
 
@@ -628,13 +659,54 @@ Auth-only variables (`JWT_*`, `ADMIN_*`, `GOOGLE_*`) are tabulated in
 | `PRICING_SOURCE_URL` | LiteLLM raw JSON | `${PRICING_SOURCE_URL:-…}` | Dataset fetched when live pricing is on |
 | `PRICING_REFRESH_TTL_SECONDS` | `86400` | `${PRICING_REFRESH_TTL_SECONDS:-86400}` | In-process cache TTL for the live fetch (no Redis). Once a day |
 
+### Environment variables (observability)
+
+Optional. Defined in `backend/app/config.py` and forwarded by both compose
+files. `/chat` and `/hint` keep the same status codes, SSE events, and hint
+JSON when the flag is off or either key is empty.
+
+| Variable | Settings default | Compose | Consumed by |
+|---|---|---|---|
+| `LANGFUSE_ENABLED` | `false` | `${LANGFUSE_ENABLED:-false}` | `ai/observability.py` — `true` traces `/chat` and `/hint`. Off or missing keys → no-op |
+| `LANGFUSE_PUBLIC_KEY` | `""` | `${LANGFUSE_PUBLIC_KEY:-}` | `pk-lf-…` from project `hint-staging`. Never committed. Empty → tracing off |
+| `LANGFUSE_SECRET_KEY` | `""` | `${LANGFUSE_SECRET_KEY:-}` | `sk-lf-…`. Never committed. Empty → tracing off |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | `${LANGFUSE_HOST:-https://cloud.langfuse.com}` | EU Cloud region |
+
+Trace shape, cache-hit behavior, and the "cost is not billing" rule:
+[`06-ai-layer.md`](06-ai-layer.md#observability-langfuse).
+
 ### Usage pricing (time-of-use)
 
-Every `/chat` and every cache-miss `/hint` LLM call is costed and written to
-the `usage_events` collection (`UsageRepository.record`), then marked up by
-`USAGE_BILLING_MARKUP` into `billable_usd`. A hint served from the in-process
-cache writes no event. `GET /api/v1/billing/usage` sums `billable_usd` for the
-period into `used_usd` and compares it against the plan allowance.
+Every successful `/chat` and every cache-miss `/hint` is costed and written
+to `usage_events` (`UsageRepository.record`). `billable_usd` is
+`round(cost_usd × USAGE_BILLING_MARKUP, 6)` (default markup `1.3`). A hint
+served from the in-process cache writes no event. A chat stream that ends
+in `event: error` writes no event. Companies with no `owner_id` are skipped.
+A ledger or Polar ingest failure is logged and does not change the HTTP
+response. `GET /api/v1/billing/usage` sums `billable_usd` for the period
+into `used_usd` and compares it with `PlanLimits.monthly_cost_usd`.
+
+When `POLAR_ACCESS_TOKEN` is set, the same `billable_usd` is ingested as a
+Polar `hint_usage` event (`metadata.billable_usd`, `external_customer_id` =
+the company `owner_id`). The meter should sum that field at **$1 per unit**,
+with included units equal to the plan allowance. Full flow:
+[`07-user-management-and-billing.md`](07-user-management-and-billing.md#5-usage-metering--pricing).
+
+`usage_events` document (`backend/app/repositories/usage_repo.py`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `company_id` | `str` | Widget company that spent the tokens |
+| `owner_id` | `str` | Company owner's `user_id`. Usage is summed on this field |
+| `kind` | `"chat" \| "hint"` | One row per successful chat, or per cache-miss hint |
+| `model` | `str` | `deepseek-flash`, `gpt-4o-mini`, or whatever the provider returned |
+| `input_tokens` / `output_tokens` | `int` | From LLM `usage_metadata` |
+| `cost_usd` | `float` | Raw model cost for the applied tier |
+| `billable_usd` | `float` | `cost_usd × USAGE_BILLING_MARKUP`, 6 decimal places |
+| `price_tier` | `"peak" \| "offpeak" \| "flat"` | Rate that produced `cost_usd` |
+| `created_at` | `datetime` | UTC. The billing-period filter uses this field |
+
+Index: `(owner_id, created_at)`, created at startup.
 
 Cost model (`backend/app/models/pricing.py`):
 
@@ -721,12 +793,16 @@ There is no retry endpoint — re-upload the file or re-add the URL (new
 |-------------|-----------------------------------------------------------------------|---------|
 | `companies` | `{company_id, name, owner_id, created_at, suggested_questions}`       | `company_id` **unique** · `owner_id` |
 | `documents` | `{document_id, company_id, filename, size_bytes, chunk_count, status, source_type, source_url, error, created_at}` | `document_id` **unique** · `company_id` |
-| `users`     | `{user_id, email, role, password_hash, google_sub, created_at, plan, subscription_status, polar_customer_id, polar_subscription_id, current_period_end}` | `email` **unique** · `user_id` **unique sparse** · `google_sub` **unique sparse** |
+| `users`     | `{user_id, email, role, password_hash, google_sub, created_at, plan, subscription_status, polar_customer_id, polar_subscription_id, current_period_start, current_period_end}` | `email` **unique** · `user_id` **unique sparse** · `google_sub` **unique sparse** |
+| `usage_events` | `{company_id, owner_id, kind, model, input_tokens, output_tokens, cost_usd, billable_usd, price_tier, created_at}` | `(owner_id, created_at)` |
 
 `owner_id` is null only in the window between deploy and the first boot
 backfill. `password_hash` is null for Google-only users. `user_id` and
-`google_sub` indexes are sparse so a legacy row missing the field does not
-collide on null.
+`google_sub` indexes are sparse so a row that omits the field
+does not collide. An explicit `null` is still indexed, so `UserRepository.create`
+writes `google_sub` only after a Google account is linked. Field-level
+`usage_events` notes are under
+[Usage pricing](#usage-pricing-time-of-use).
 
 ### ChromaDB
 
@@ -946,7 +1022,9 @@ curl -s -X POST localhost:8000/api/v1/hint \
 | `401 {"detail":"Invalid or expired token - sign in again"}` | Expired / tampered JWT, or `JWT_SECRET` changed | Login again |
 | `503 {"detail":"OPENAI_API_KEY is not configured; set it in .env and restart"}` on upload / retrieve / chat / hint | Empty `OPENAI_API_KEY` | Stack boots fine (Phase 0 behavior preserved); set the key in `.env`, `docker compose up -d` |
 | `503 {"detail":"DEEPSEEK_API_KEY is not configured; set it in .env and restart"}` on chat / hint | `LLM_PROVIDER=deepseek` and empty `DEEPSEEK_API_KEY` | Upload and `/retrieve` still work; set the DeepSeek key for generation |
-| Chat stream ends with `event: error` | LLM/network failure after tokens were sent | HTTP status stays 200; treat the assistant message as failed. See [`06-ai-layer.md`](06-ai-layer.md#failure-modes) |
+| Chat stream ends with `event: error` | LLM/network failure after tokens were sent | HTTP status stays 200; treat the assistant message as failed. No `usage_events` row. See [`06-ai-layer.md`](06-ai-layer.md#failure-modes) |
+| `/chat` and `/hint` succeed, `used_usd` stays 0 | Cache-hit hint, company with no `owner_id`, or a swallowed ledger error | Cache hits write nothing. Legacy ownerless companies are skipped. Check backend logs for `usage record failed` |
+| No Langfuse traces, requests still succeed | `LANGFUSE_ENABLED=false` or a key is empty | Expected no-op. The SSE and hint JSON are unchanged |
 | Hint `source: null` / chat `done` with `"sources":[]` | Company exists, no ready documents | Expected empty-KB path — model uses the page/label, not invented features |
 | Upload returns `status: "failed"`, error "No extractable text (scanned PDF or empty file)" | Scanned/image-only PDF, or empty file | Expected — no OCR in the POC; response is still 201 with per-file status |
 | Upload returns `status: "failed"`, error "Unsupported file type: .png" | Extension outside pdf/md/txt/html/htm | Batch continues; other files unaffected |

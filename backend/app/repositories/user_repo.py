@@ -60,7 +60,6 @@ class UserRepository:
             "email": email,
             "role": role,
             "password_hash": password_hash,
-            "google_sub": google_sub,
             "created_at": datetime.now(timezone.utc),
             "plan": None,
             "subscription_status": None,
@@ -69,6 +68,10 @@ class UserRepository:
             "current_period_start": None,
             "current_period_end": None,
         }
+        # Sparse unique index still indexes an explicit null, so only one
+        # password user could ever be inserted. Omit the field until Google links.
+        if google_sub is not None:
+            doc["google_sub"] = google_sub
         await self.collection.insert_one(doc)  # DuplicateKeyError → 409 upstream
         doc.pop("_id", None)
         return UserInDB(**doc)

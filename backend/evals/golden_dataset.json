@@ -1,0 +1,90 @@
+[
+  {
+    "question": "How do I export a report?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Reports",
+      "interactive": [
+        {"tag": "button", "text": "Export report", "selector_path": "main button.export"},
+        {"tag": "button", "text": "Run now", "selector_path": "main button.run-now"}
+      ]
+    },
+    "expected_keywords": ["export", "report"]
+  },
+  {
+    "question": "How do I create a new invoice?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Invoices",
+      "interactive": [
+        {"tag": "button", "text": "Create invoice", "selector_path": "form button.create"},
+        {"tag": "button", "text": "Save as draft", "selector_path": "form button.draft"}
+      ]
+    },
+    "expected_keywords": ["create", "invoice"]
+  },
+  {
+    "question": "How do I mark an invoice as paid?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Invoices"
+    },
+    "expected_keywords": ["paid"]
+  },
+  {
+    "question": "Where do I change the workspace name?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Settings"
+    },
+    "expected_keywords": ["workspace"]
+  },
+  {
+    "question": "How do I add a new customer?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Customers"
+    },
+    "expected_keywords": ["customer"]
+  },
+  {
+    "question": "How can I filter invoices by their status?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Invoices"
+    },
+    "expected_keywords": ["status"]
+  },
+  {
+    "question": "How do I wipe the demo data?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Settings"
+    },
+    "expected_keywords": ["wipe"]
+  },
+  {
+    "question": "How do I schedule a report to be sent automatically?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Reports"
+    },
+    "expected_keywords": ["schedule"]
+  },
+  {
+    "question": "How do I change the accent color of the app?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Settings"
+    },
+    "expected_keywords": ["accent"]
+  },
+  {
+    "question": "How do I import customers from a CSV file?",
+    "page_context": {
+      "url": "http://localhost:3002/",
+      "title": "Acme Invoicing — Customers"
+    },
+    "expected_keywords": ["csv"]
+  }
+]
