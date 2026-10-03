@@ -192,7 +192,10 @@ deploy): [`docs/deployment.md`](docs/deployment.md).
 
 Admin and demo **bake** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at
 **image build** time. In production those are GitHub Actions secrets
-(the VPS `.env` cannot change already-built JS). Example for droplet
+(the VPS `.env` cannot change already-built JS). Demo also bakes
+`DEMO_COMPANY_ID` in CI; committed `demo/index.html` keeps
+`cmp_YOUR_ID` so local compose (bind-mount, no rewrite) is not pinned
+to one tenant. Example for droplet
 `159.89.26.67`:
 
 ```
@@ -238,6 +241,7 @@ backend; the variables below are the ones you normally set on the host.
 | `CHROMA_HOST` / `CHROMA_PORT` | set by compose | backend | Override only for local runs |
 | `VITE_API_URL` | `http://localhost:8000` | admin + demo (build arg) | Admin → backend URL + snippet `data-hint-api-url`. Production: GitHub secret, inlined at image build |
 | `VITE_WIDGET_CDN_URL` | `http://localhost:1337` | admin + demo (build arg) | Embed snippet CDN base. Production: GitHub secret, inlined at image build |
+| `DEMO_COMPANY_ID` | `cmp_YOUR_ID` | demo (build arg) | Default embed `data-hint-company-id`. Source keeps the placeholder; production CI inlines the live tenant. Local compose bind-mounts `./demo` and ignores this |
 
 ## Local frontend dev (optional)
 

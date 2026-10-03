@@ -24,7 +24,7 @@ Local development still uses the root `docker-compose.yml` (`docker compose up -
 
 Tags: git SHA and `latest`. CI sets `IMAGE_TAG` to the commit SHA on the droplet `.env`.
 
-Admin and demo **inline** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at **image build** time. Changing those URLs requires a new CI build (repo secrets), not an edit of the VPS `.env`.
+Admin and demo **inline** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at **image build** time. Changing those URLs requires a new CI build (repo secrets), not an edit of the VPS `.env`. Demo also inlines `DEMO_COMPANY_ID` the same way (CI build-arg). Committed `demo/index.html` keeps the `cmp_YOUR_ID` placeholder so local compose — which bind-mounts `./demo` and does not run this rewrite — is not pinned to one Mongo tenant.
 
 ## Host ports
 
@@ -73,6 +73,9 @@ SSH in with your own key (`~/.ssh/digitalocean`), not a key from this repo.
    #   POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET
    #   POLAR_PRODUCT_ID_BASIC, POLAR_PRODUCT_ID_PRO
    #   POLAR_ENVIRONMENT=sandbox   # set production only after a signed sandbox webhook
+   #   LANGFUSE_ENABLED=false      # true traces /chat and /hint; missing keys stay a no-op
+   #   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY   # pk-lf-… / sk-lf-…; never commit
+   #   LANGFUSE_HOST=https://cloud.langfuse.com
    ```
 
    Production compose interpolates those Google and Polar keys from `.env` into the backend. `deploy.sh` does not require them. Empty values keep the code defaults: Google routes return 503, checkout / portal / `POST /api/v1/webhooks/polar` return 503, `POLAR_ENVIRONMENT` stays `sandbox`, and checkout plus Google send the browser back to `http://localhost:3001`.
@@ -124,9 +127,9 @@ After it is up:
 | Backend | http://159.89.26.67:8000/health |
 | Admin | http://159.89.26.67:3001 |
 | Widget loader | http://159.89.26.67:1337/embed/v1/loader.js |
-| Demo | http://159.89.26.67:3002/?company_id=cmp_… |
+| Demo | http://159.89.26.67:3002/ (`?company_id=` overrides the baked-in default) |
 
-Create a company on **that** Admin, then open Demo with that `company_id`. A leftover `cmp_…` from another machine will 404.
+A fresh demo load uses the company id baked into the image at CI. Override with `?company_id=` from **that** Admin. A leftover `cmp_…` from another machine will 404.
 
 ### Later deploys
 
@@ -175,6 +178,17 @@ See `.env.example` for optional `LLM_*`, `DEEPSEEK_*`, `EMBEDDING_MODEL`, cache,
 | `POLAR_ENVIRONMENT` | `sandbox` | `sandbox` or `production`. Stay on sandbox until a signed sandbox webhook is observed |
 | `POLAR_PRODUCT_ID_BASIC` | `""` | Checkout product for Basic |
 | `POLAR_PRODUCT_ID_PRO` | `""` | Checkout product for Pro |
+
+### Optional Langfuse keys (forwarded; not validated)
+
+`infrastructure/docker-compose.yml` passes these into the backend. Leave them unset to boot with tracing off. Langfuse cost figures are approximate and are not a billing source.
+
+| Variable | Default when unset | Why |
+|---|---|---|
+| `LANGFUSE_ENABLED` | `false` | `true` traces `/chat` and `/hint`. Off, or keys empty, is a no-op |
+| `LANGFUSE_PUBLIC_KEY` | `""` | `pk-lf-…` from the Cloud project. Never commit |
+| `LANGFUSE_SECRET_KEY` | `""` | `sk-lf-…`. Never commit |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | EU Cloud region |
 
 ## Useful commands (on the droplet)
 
