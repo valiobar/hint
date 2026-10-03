@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.ai.observability import shutdown_langfuse
 from app.config import get_settings
 from app.db import chroma, mongo
 from app.repositories.user_repo import UserRepository
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
     ).ensure_admin_user()
     await backfill_legacy_company_owners(mongo.get_db(), settings.admin_email)
     yield
+    shutdown_langfuse()
     mongo.close()
 
 

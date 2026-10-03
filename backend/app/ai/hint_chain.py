@@ -1,6 +1,7 @@
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.ai.llm_factory import create_chat_llm
+from app.ai.observability import trace_config
 from app.ai.prompts import HINT_PROMPT, format_chunks, format_element
 from app.models.assist import HintRequest, HintResponse
 from app.services.retrieval_service import RetrievalService
@@ -22,12 +23,14 @@ async def generate_hint(
     chunks = await retrieval_service.retrieve(
         body.company_id, build_hint_query(body), k=3
     )
+    config = trace_config(name="hint", company_id=body.company_id)
     result = await hint_llm.ainvoke(
         HINT_PROMPT.format(
             page_title=body.page_context.title,
             element=format_element(body.element),
             chunks=format_chunks(chunks),
-        )
+        ),
+        **({"config": config} if config else {}),
     )
     return HintResponse(
         hint=result.content.strip()[:HINT_MAX_CHARS],
