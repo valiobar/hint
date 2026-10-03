@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createCheckout, getPortalUrl } from '@/shared/api';
 import type { Plan, SubscriptionStatus } from '@/shared/api';
 import { toErrorMessage } from '@/shared/lib/error-message';
@@ -6,6 +6,7 @@ import { useAdminStore } from '@/shared/store/admin-store';
 import { Button } from '@/shared/ui';
 import styles from './billing.module.css';
 import { PlanCard } from './plan-card';
+import { UsageSection } from './usage-section';
 
 const ACTIVE_STATUSES: readonly SubscriptionStatus[] = ['active', 'trialing'];
 
@@ -38,6 +39,10 @@ export const BillingScreen = () => {
 	const me = useAdminStore((s) => s.me);
 	const [loadingPlan, setLoadingPlan] = useState<Plan | null>(null);
 	const [error, setError] = useState<string | null>(null);
+
+	useEffect(() => {
+		void useAdminStore.getState().loadUsage();
+	}, []);
 
 	const subscribe = async (plan: Plan) => {
 		setLoadingPlan(plan);
@@ -82,6 +87,7 @@ export const BillingScreen = () => {
 						</span>
 					</p>
 				) : null}
+				<UsageSection />
 				<div className={styles.cards}>
 					{PLANS.map((plan) => {
 						const current = me?.plan === plan.id;

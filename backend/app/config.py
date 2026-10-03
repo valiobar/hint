@@ -42,6 +42,16 @@ class Settings(BaseSettings):
     polar_environment: str = "sandbox"  # "sandbox" | "production"
     polar_product_id_basic: str = ""
     polar_product_id_pro: str = ""
+    # Customer markup applied to raw model cost for metered overage billing.
+    usage_billing_markup: float = 1.3
+    # Live list-price refresh (flat models only). Off by default; DeepSeek
+    # peak/off-peak pricing is always on regardless of this flag.
+    pricing_live_enabled: bool = False
+    pricing_source_url: str = (
+        "https://raw.githubusercontent.com/BerriAI/litellm/main/"
+        "model_prices_and_context_window.json"
+    )
+    pricing_refresh_ttl_seconds: int = 86_400  # once a day; list prices change rarely
 
     # Langfuse observability (staging-first; tracing only, never billing)
     langfuse_enabled: bool = False

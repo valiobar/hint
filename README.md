@@ -343,5 +343,6 @@ the seeded superadmin bypasses them.
 | [`docs/04-admin.md`](docs/04-admin.md) | Admin SPA |
 | [`docs/05-auth.md`](docs/05-auth.md) | Auth contract |
 | [`docs/06-ai-layer.md`](docs/06-ai-layer.md) | LangGraph, SSE, hint cache, walkthrough prompt |
+| [`docs/07-user-management-and-billing.md`](docs/07-user-management-and-billing.md) | Users, roles, Polar subscriptions, usage metering + time-of-use pricing |
 | [`demo/ADMIN_USER_MANUAL.md`](demo/ADMIN_USER_MANUAL.md) | Operator screens and errors |
 | [`demo/USER_MANUAL.md`](demo/USER_MANUAL.md) | Acme Invoicing demo controls |

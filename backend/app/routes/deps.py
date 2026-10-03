@@ -1,6 +1,7 @@
 import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from polar_sdk import Polar
 
 from app.config import get_settings
 from app.db.chroma import get_chroma
@@ -10,6 +11,7 @@ from app.models.company import Company
 from app.models.user import UserInDB
 from app.repositories.company_repo import CompanyRepository
 from app.repositories.document_repo import DocumentRepository
+from app.repositories.usage_repo import UsageRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.vector_repo import VectorRepository
 from app.services.auth_service import AuthService
@@ -17,9 +19,17 @@ from app.services.billing_service import BillingService
 from app.services.company_service import CompanyService
 from app.services.hint_cache import HintCache
 from app.services.ingestion_service import IngestionService
+from app.services.polar_usage_reporter import PolarUsageReporter
+from app.services.pricing_service import (
+    LivePricing,
+    PricingProvider,
+    StaticPricing,
+)
 from app.services.retrieval_service import RetrievalService
+from app.services.usage_service import UsageService
 
 _hint_cache: HintCache | None = None
+_pricing: PricingProvider | None = None
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 _UNAUTHORIZED_HEADERS = {"WWW-Authenticate": "Bearer"}
@@ -76,6 +86,42 @@ async def require_user(
 
 def get_company_repo() -> CompanyRepository:
     return CompanyRepository(get_db())
+
+
+def get_usage_repo() -> UsageRepository:
+    return UsageRepository(get_db())
+
+
+def get_pricing_provider() -> PricingProvider:
+    global _pricing
+    if _pricing is None:
+        s = get_settings()
+        _pricing = (
+            LivePricing(s.pricing_source_url, s.pricing_refresh_ttl_seconds)
+            if s.pricing_live_enabled
+            else StaticPricing()
+        )
+    return _pricing
+
+
+def get_usage_service(
+    repo: UsageRepository = Depends(get_usage_repo),
+) -> UsageService:
+    settings = get_settings()
+    polar = None
+    if settings.polar_access_token:  # optional: public routes boot without Polar
+        client = Polar(
+            access_token=settings.polar_access_token,
+            server="sandbox" if settings.polar_environment == "sandbox" else None,
+        )
+        polar = PolarUsageReporter(client)
+    return UsageService(
+        repo,
+        settings.usage_billing_markup,
+        get_pricing_provider(),
+        settings,
+        polar,
+    )
 
 
 def get_company_service(

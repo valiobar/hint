@@ -1,12 +1,14 @@
 # Hint — Backend (Knowledge Base API)
 
-> **Status: Phase 3 (AI layer) complete, plus multi-user billing.**
-> Covers JWT auth (register, login, Google), Polar checkout / portal /
-> webhooks, companies CRUD with ownership and plan limits, document
-> ingestion (files and support-page URLs → parse → chunk → embed → Chroma),
-> retrieval, and the widget-facing chat (SSE) + hint endpoints. AI runtime:
-> [`06-ai-layer.md`](06-ai-layer.md). Auth contract (seeding, token TTL,
-> protected vs public): [`05-auth.md`](05-auth.md). Admin SPA:
+> **Status: Phase 3 (AI layer) complete, plus multi-user billing and usage
+> metering.** Covers JWT auth (register, login, Google), Polar checkout /
+> portal / webhooks, usage metering with time-of-use pricing, companies CRUD
+> with ownership and plan limits, document ingestion (files and support-page
+> URLs → parse → chunk → embed → Chroma), retrieval, and the widget-facing
+> chat (SSE) + hint endpoints. End-to-end user + billing reference:
+> [`07-user-management-and-billing.md`](07-user-management-and-billing.md).
+> AI runtime: [`06-ai-layer.md`](06-ai-layer.md). Auth contract (seeding,
+> token TTL, protected vs public): [`05-auth.md`](05-auth.md). Admin SPA:
 > [`04-admin.md`](04-admin.md). Widget:
 > [`03-widget.md`](03-widget.md). Stack/env:
 > [`01-architecture-overview.md`](01-architecture-overview.md).
@@ -549,6 +551,26 @@ Errors: `401` · `404` `{"detail": "No subscription on file"}` when
 `polar_customer_id` is still null (no webhook has landed) · `503` Polar
 not configured.
 
+### GET /api/v1/billing/usage → 200 (bearer)
+
+Metered usage for the current billing period. Full model, pricing, and the
+Polar meter relationship: [`07-user-management-and-billing.md`](07-user-management-and-billing.md#5-usage-metering--pricing).
+
+```json
+{
+  "period_start": "2026-10-01T00:00:00Z",
+  "period_end":   "2026-10-31T00:00:00Z",
+  "allowance_usd": 50.0,       // plan monthly_cost_usd; -1 == unlimited
+  "used_usd": 12.5,            // Σ billable_usd this period
+  "overage_usd": 0.0,          // max(0, used - allowance); 0 when unlimited
+  "pricing_tier": "offpeak"    // current DeepSeek time-of-use tier ("peak"|"offpeak")
+}
+```
+
+`used_usd` sums `billable_usd` from `usage_events` for the caller's `owner_id`
+over the period (`current_period_start/end`, else `end − 30d`, else the calendar
+month). Errors: `401`. Never 503 — this route does not require Polar.
+
 ### POST /api/v1/webhooks/polar → 202 (signature)
 
 No bearer token. Raw body + request headers go to
@@ -601,6 +623,38 @@ Auth-only variables (`JWT_*`, `ADMIN_*`, `GOOGLE_*`) are tabulated in
 | `POLAR_ENVIRONMENT` | `sandbox` | `${POLAR_ENVIRONMENT:-sandbox}` | `sandbox` selects the Polar sandbox server; any other value uses production |
 | `POLAR_PRODUCT_ID_BASIC` | `""` | `${POLAR_PRODUCT_ID_BASIC:-}` | Checkout product for `plan: "basic"`; webhook maps this id back to `basic` |
 | `POLAR_PRODUCT_ID_PRO` | `""` | `${POLAR_PRODUCT_ID_PRO:-}` | Checkout product for `plan: "pro"` |
+| `USAGE_BILLING_MARKUP` | `1.3` | not passed (code default) | Multiplier applied to raw model cost → `billable_usd` on each usage event |
+| `PRICING_LIVE_ENABLED` | `false` | `${PRICING_LIVE_ENABLED:-false}` | `true` → once-a-day fetch of LiteLLM list prices for **flat** models. DeepSeek peak/off-peak is unaffected (always on) |
+| `PRICING_SOURCE_URL` | LiteLLM raw JSON | `${PRICING_SOURCE_URL:-…}` | Dataset fetched when live pricing is on |
+| `PRICING_REFRESH_TTL_SECONDS` | `86400` | `${PRICING_REFRESH_TTL_SECONDS:-86400}` | In-process cache TTL for the live fetch (no Redis). Once a day |
+
+### Usage pricing (time-of-use)
+
+Every `/chat` and every cache-miss `/hint` LLM call is costed and written to
+the `usage_events` collection (`UsageRepository.record`), then marked up by
+`USAGE_BILLING_MARKUP` into `billable_usd`. A hint served from the in-process
+cache writes no event. `GET /api/v1/billing/usage` sums `billable_usd` for the
+period into `used_usd` and compares it against the plan allowance.
+
+Cost model (`backend/app/models/pricing.py`):
+
+| Model | Pricing | Rate |
+|---|---|---|
+| `deepseek-flash` | **Time-of-use** (`TIME_OF_USE_PRICES`) | **Peak** `$0.30`/1M in · `$1.20`/1M out; **off-peak** = exactly half |
+| `gpt-4o-mini` and others | Flat (`MODEL_PRICES`) | `$0.15`/1M in · `$0.60`/1M out; unknown model → `$0` |
+
+DeepSeek peak = **Mon–Fri `01:00–04:00` and `06:00–10:00` UTC**; everything
+else (incl. all weekend) is off-peak. The tier is a pure function of the
+request's UTC time, so it is **always on** regardless of `PRICING_LIVE_ENABLED`.
+Each usage event stores a `price_tier` (`"peak"` | `"offpeak"` | `"flat"`) so
+the charge is auditable. DeepSeek is not in any public dataset, so its table is
+a local override; the optional daily live refresh only updates flat models.
+
+`UsageSummary` carries `pricing_tier` (`"peak"` | `"offpeak"`) describing the
+tier **right now** (flat models report `"offpeak"` — there is nothing cheaper
+to schedule around). The admin billing screen renders this as a Peak/Off-peak
+badge. This is an internal cost estimate; **Polar remains the invoice
+authority** — keep the markup and Polar meter config aligned.
 
 ## Ingestion pipeline
 

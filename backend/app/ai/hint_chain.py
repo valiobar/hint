@@ -3,7 +3,10 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from app.ai.llm_factory import create_chat_llm
 from app.ai.observability import trace_config
 from app.ai.prompts import HINT_PROMPT, format_chunks, format_element
+from app.ai.usage import default_model, model_of, usage_from_message
+from app.config import get_settings
 from app.models.assist import HintRequest, HintResponse
+from app.models.usage import TokenUsage
 from app.services.retrieval_service import RetrievalService
 
 HINT_MAX_CHARS = 140
@@ -18,7 +21,7 @@ async def generate_hint(
     body: HintRequest,
     retrieval_service: RetrievalService,
     llm: BaseChatModel | None = None,
-) -> HintResponse:
+) -> tuple[HintResponse, TokenUsage, str]:
     hint_llm = llm or create_chat_llm(temperature=0.2, max_tokens=80)
     chunks = await retrieval_service.retrieve(
         body.company_id, build_hint_query(body), k=3
@@ -32,7 +35,12 @@ async def generate_hint(
         ),
         **({"config": config} if config else {}),
     )
-    return HintResponse(
+    response = HintResponse(
         hint=result.content.strip()[:HINT_MAX_CHARS],
         source=chunks[0].filename if chunks else None,
+    )
+    return (
+        response,
+        usage_from_message(result),
+        model_of(result, default_model(get_settings())),
     )

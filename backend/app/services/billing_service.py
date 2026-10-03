@@ -106,6 +106,7 @@ class BillingService:
             "subscription_status": status,
             "polar_customer_id": getattr(sub, "customer_id", None),
             "polar_subscription_id": getattr(sub, "id", None),
+            "current_period_start": getattr(sub, "current_period_start", None),
             "current_period_end": getattr(sub, "current_period_end", None),
         }
         if status in _CLEARS_PLAN:

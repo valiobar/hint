@@ -10,7 +10,7 @@ const me = (overrides: Partial<Me> = {}): Me => ({
 	created_at: '2026-01-01T00:00:00Z',
 	plan: null,
 	subscription_status: null,
-	limits: { max_companies: 0, url_ingestion: false },
+	limits: { max_companies: 0, url_ingestion: false, monthly_cost_usd: 0 },
 	...overrides,
 });
 
@@ -31,7 +31,7 @@ it('stops polling and loads companies once the subscription is active', async ()
 			me({
 				plan: 'pro',
 				subscription_status: 'active',
-				limits: { max_companies: 10, url_ingestion: true },
+				limits: { max_companies: 10, url_ingestion: true, monthly_cost_usd: 50 },
 			}),
 		);
 	useAdminStore.setState({

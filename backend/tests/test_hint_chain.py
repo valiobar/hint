@@ -10,19 +10,24 @@ async def test_generate_hint_clamps_and_sources() -> None:
     svc = FakeRetrievalService(
         [Chunk(text="Export from the toolbar.", filename="manual.pdf", score=0.2)]
     )
-    result = await generate_hint(
+    result, usage, model = await generate_hint(
         make_hint_request(), svc, llm=make_fake_llm("x" * 200)
     )
     assert len(result.hint) == 140
     assert result.source == "manual.pdf"
+    assert usage.input_tokens == 0
+    assert usage.output_tokens == 0
+    assert model
     assert svc.calls == [("cmp_test0001", "Export report — Reports", 3)]
 
 
 @pytest.mark.asyncio
 async def test_generate_hint_empty_kb_has_no_source() -> None:
-    result = await generate_hint(
+    result, usage, _model = await generate_hint(
         make_hint_request(),
         FakeRetrievalService([]),
         llm=make_fake_llm("Exports the current report."),
     )
     assert result.source is None
+    assert usage.input_tokens == 0
+    assert usage.output_tokens == 0

@@ -3,8 +3,10 @@
 > **Status: multi-user auth.** Email/password registration, Google OAuth, and a
 > seeded superadmin. JWT access tokens, no refresh flow. Plan and limits on
 > `GET /auth/me` come from Polar — billing contract:
-> [`02-backend.md`](02-backend.md#billing). Admin UI (sign-up, Google, billing):
-> [`04-admin.md`](04-admin.md).
+> [`02-backend.md`](02-backend.md#billing). End-to-end user + billing +
+> usage-metering reference:
+> [`07-user-management-and-billing.md`](07-user-management-and-billing.md).
+> Admin UI (sign-up, Google, billing): [`04-admin.md`](04-admin.md).
 
 Companies, documents, and billing routes require a bearer token. Widget-facing
 `POST /api/v1/retrieve`, `POST /api/v1/chat`, `POST /api/v1/hint`,
@@ -282,6 +284,7 @@ routes are public. The Polar webhook router has no bearer check.
 | `GET /api/v1/auth/me` | bearer | Session restore; returns role, plan, limits |
 | `POST /api/v1/billing/checkout` | bearer | Start Polar checkout |
 | `GET /api/v1/billing/portal` | bearer | Polar customer portal |
+| `GET /api/v1/billing/usage` | bearer | Metered usage summary for the current period |
 | `POST /api/v1/webhooks/polar` | signature | Subscription state sync (not a user JWT) |
 | `GET/POST /api/v1/companies` | bearer | Caller-scoped; create is plan-gated |
 | `GET /api/v1/companies/{id}` | bearer | Owner or superadmin. Another user's company is **404**, same body as unknown |

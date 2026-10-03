@@ -18,6 +18,7 @@ def create_chat_llm(
             model=settings.llm_model,
             api_key=settings.openai_api_key,
             streaming=streaming,
+            stream_usage=True,
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -27,6 +28,7 @@ def create_chat_llm(
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             streaming=streaming,
+            stream_usage=True,
             temperature=temperature,
             max_tokens=max_tokens,
             extra_body=_DEEPSEEK_THINKING_DISABLED,

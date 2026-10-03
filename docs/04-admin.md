@@ -5,7 +5,8 @@
 > Zustand, Zod. Email sign-in and sign-up, Google, Polar billing (Basic / Pro),
 > companies, file and URL ingest, starter questions, embed snippet.
 > Auth contract: [`05-auth.md`](05-auth.md). Billing contract:
-> [`02-backend.md`](02-backend.md#billing).
+> [`02-backend.md`](02-backend.md#billing). End-to-end user + billing + usage
+> reference: [`07-user-management-and-billing.md`](07-user-management-and-billing.md).
 
 The admin SPA (`admin/`, host port **3001**) is the operator UI for the knowledge
 base. A visitor signs in, signs up, or continues with Google. A `user` without
@@ -211,6 +212,20 @@ subscription** calls `getPortalUrl()` and opens `portal_url` in a new tab.
 `CheckoutPending` polls every 2s, up to 30 attempts. `active` or `trialing`
 clears `checkoutPending` and calls `loadCompanies()`. After 30 attempts the
 copy is: `Payment received — your plan is being activated. Refresh in a minute.`
+
+#### Usage this period (`usage-section.tsx`)
+
+Below the plan cards, `UsageSection` reads `usage` from the store (loaded from
+`GET /api/v1/billing/usage`) and renders nothing until it arrives. It shows:
+
+| Element | Source | Notes |
+|---|---|---|
+| Used / allowance bar (`data-testid="usage-section"`) | `used_usd` / `allowance_usd` | `Unlimited` label when `allowance_usd === -1`; bar clamps to 100%. |
+| Overage line (`data-testid="usage-overage"`) | `overage_usd` | Only when `> 0`. |
+| Pricing badge (`data-testid="usage-pricing"`) | `pricing_tier` | Optional field. Green **Off-peak pricing** / amber **Peak pricing** + a one-line DeepSeek time-of-use explanation. |
+
+Pricing/metering contract:
+[`07-user-management-and-billing.md`](07-user-management-and-billing.md#5-usage-metering--pricing).
 
 ### Plan gates in the panel
 

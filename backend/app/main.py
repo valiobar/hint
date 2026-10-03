@@ -14,7 +14,7 @@ from app.routes.assist import router as assist_router
 from app.routes.auth import router as auth_router
 from app.routes.billing import router as billing_router
 from app.routes.companies import router as companies_router
-from app.routes.deps import require_user
+from app.routes.deps import get_pricing_provider, require_user
 from app.routes.documents import router as documents_router
 from app.routes.retrieve import router as retrieve_router
 from app.routes.webhooks import router as webhooks_router
@@ -53,6 +53,14 @@ async def lifespan(app: FastAPI):
         UserRepository(mongo.get_db()), settings
     ).ensure_admin_user()
     await backfill_legacy_company_owners(mongo.get_db(), settings.admin_email)
+    if settings.pricing_live_enabled:
+        # Warm the live price cache so the first request isn't the one paying
+        # the fetch latency. Best-effort: a failure here never blocks boot.
+        provider = get_pricing_provider()
+        try:
+            await provider.refresh()  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 — pricing must never break startup
+            logger.warning("live price warm fetch failed", exc_info=True)
     yield
     shutdown_langfuse()
     mongo.close()

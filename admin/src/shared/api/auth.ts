@@ -20,6 +20,7 @@ export type SubscriptionStatus =
 export interface PlanLimits {
 	max_companies: number;
 	url_ingestion: boolean;
+	monthly_cost_usd: number; // included usage allowance
 }
 
 export interface Me {
