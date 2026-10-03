@@ -39,6 +39,7 @@ routes/assist.py          POST /chat (SSE) · POST /hint (JSON)
         prompts.py        CONDENSE_PROMPT · PAGE_STATE_PROMPT · ANSWER_SYSTEM · HINT_PROMPT + formatters
         chat_graph.py     ChatState · build_chat_graph(retrieval_service)
         hint_chain.py     build_hint_query · generate_hint
+        usage.py          usage_from_message · model_of · default_model
         observability.py  trace_config(name, company_id) · shutdown_langfuse
         └─▶ services/retrieval_service.py   retrieve(company_id, query, k) → list[Chunk]
                                             Chunk.source_url from Chroma metadata when present
@@ -281,6 +282,11 @@ DeepSeek Flash enables thinking by default. The factory always sends
 `extra_body={"thinking": {"type": "disabled"}}` so the short max-token budgets
 below still return visible text instead of being spent on reasoning.
 
+Every client also sets `stream_usage=True`. That is what puts
+`usage_metadata` on the message when a streamed answer finishes
+(`on_chat_model_end`). Without it, the chat ledger would record 0 tokens
+for the answer node.
+
 Call sites stay unchanged when switching providers.
 
 Call-site defaults:
@@ -312,7 +318,34 @@ emits no trace. Lifespan teardown calls `shutdown_langfuse()` (`flush` then
 
 Langfuse cost is approximate dashboard data, not a billing source.
 `deepseek-flash` needs a custom model price in the Langfuse project; cache-hit
-and peak-hour discounts are not modeled.
+and peak-hour discounts are not modeled. Customer charges use the Hint
+ledger in the next section.
+
+## Token usage capture
+
+`ai/usage.py` reads token counts and the model name off a LangChain
+message. It does not import Langfuse and it does not write Mongo. The route
+(`routes/assist.py`) turns those numbers into one ledger row.
+
+| Helper | Reads | Empty / missing |
+|---|---|---|
+| `usage_from_message` | `usage_metadata.input_tokens`, `usage_metadata.output_tokens` | Non-dict metadata, or a missing key, counts as `0` |
+| `model_of` | `response_metadata.model_name`, else `model` | Falls back to the caller's default |
+| `default_model` | `LLM_MODEL` when `LLM_PROVIDER=openai`, else `DEEPSEEK_MODEL` | Used until a generation reports its own name |
+
+`POST /chat` sums **every** `on_chat_model_end` in the graph (condense,
+assess, and the streamed answer) into one `TokenUsage` and one model name
+(the last generation wins). On success it records a single `kind: "chat"`
+event, then yields `done`. The `except` path yields `event: error` and
+returns **before** that write, so a failed stream records nothing.
+
+`POST /hint` records the real tokens from `generate_hint` on a cache miss
+(`kind: "hint"`). A cache hit returns the cached JSON immediately and
+writes no event — no tokens were spent, including no `$0` row.
+
+`_safe_record` catches ledger and Polar errors, logs `usage record failed`,
+and still returns the hint JSON or yields `done`. A usage write failure
+never changes the response.
 
 ## Environment variables
 
@@ -379,7 +412,7 @@ Unit tests in `backend/tests/` use in-memory fakes (no Mongo / Chroma / network)
 | `test_assist_models.py` | Contract caps (41 elements / 2001-char excerpt / empty messages → validation error) |
 | `test_hint_cache.py` | Key stability across query-string URL variants; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query prefers `text` then `aria-label`; 140-char clamp; `source: null` on empty KB |
-| `test_llm_factory.py` | DeepSeek Flash client (base URL + thinking disabled); OpenAI uses `LLM_MODEL`; unknown provider raises |
+| `test_llm_factory.py` | DeepSeek Flash client (base URL + thinking disabled); OpenAI uses `LLM_MODEL`; `stream_usage` is true on both; unknown provider raises |
 | `test_observability.py` | Tracing off by default; missing keys stay a no-op; enabled config carries tenant id, tags, and one callback |
 | `test_chat_graph.py` | Single message skips condense; retrieval called with `(company_id, query, 5)`; answer state non-empty; `assess_page` skips the LLM without captured elements and writes the blocker verdict into `page_state` otherwise |
 | `test_url_ingestion.py` | Chat sources prefer `source_url` over filename and dedupe mixed lists; retrieval mapping covered in `test_retrieval_service.py` |

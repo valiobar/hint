@@ -48,7 +48,7 @@ subscription fields are **denormalized** here so `require_user` is a single read
 | `email` | `str` | Stored `strip().lower()`. Unique index. JWT `sub`. |
 | `role` | `"superadmin" \| "user"` | Seeded admin vs self-service user. |
 | `password_hash` | `str \| null` | bcrypt (`$2b$…`). `null` for Google-only accounts. |
-| `google_sub` | `str \| null` | Google account id once linked. Unique sparse index. |
+| `google_sub` | `str`, omitted until linked | Google account id. Unique sparse index. Password signups omit the field; an explicit `null` would still be indexed and block the next signup. |
 | `created_at` | `datetime` | |
 | `plan` | `"basic" \| "pro" \| null` | Written by the Polar webhook; `null` until a subscription lands or after cancel/revoke. |
 | `subscription_status` | `trialing \| active \| canceled \| revoked \| past_due \| null` | Written by the webhook. |

@@ -30,7 +30,7 @@ admin/src/
 │   └── styles/global.css            # reset; imports shared tokens
 ├── widgets/
 │   ├── auth-screen/                 # login ⇄ signup + Continue with Google
-│   ├── billing/                     # plan cards, portal, checkout polling
+│   ├── billing/                     # plan cards, portal, checkout polling, usage section
 │   ├── companies-sidebar/           # list + create form, or plan-limit notice
 │   ├── company-detail/              # snippet + questions + upload + URL or Pro hint
 │   └── product-overview/            # unselected-company product + feature cards
@@ -71,6 +71,9 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `authError` | `string \| null` | Backend `detail`, network message, or Google fragment error |
 | `checkoutPending` | `boolean` | Set when the URL is `?checkout=success`. Cleared when polling sees `active` / `trialing`, and on `logout` |
 | `showBilling` | `boolean` | Sidebar **Billing**, sidebar **Upgrade plan**, and the URL **Upgrade** button set this `true`. **Back to panel** sets it `false`. Default `false`; cleared on `logout` |
+| `usage` | `UsageSummary \| null` | Last `GET /billing/usage`. Stays `null` until `loadUsage()` succeeds. Cleared on `logout` |
+| `isLoadingUsage` | `boolean` | `true` while `loadUsage()` is in flight |
+| `usageError` | `string \| null` | Backend `detail` or network message when `loadUsage()` fails. The usage section does not render this string; it stays blank while `usage` is `null` |
 | `companies` | `Company[]` | Newest-first after create (prepend) |
 | `isLoadingCompanies` | `boolean` | Sidebar spinner |
 | `companiesError` | `string \| null` | List/load failures |
@@ -92,8 +95,17 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `login(email, password)` | `POST /auth/login` → `writeSession` → `GET /auth/me` → `loadCompanies` |
 | `register(email, password)` | `POST /auth/register` → `writeSession` → `GET /auth/me`. Does not load companies (the new account has no plan yet) |
 | `refreshMe()` | `GET /auth/me` and replace `me`. Returns `null` on failure. Checkout polling uses this |
-| `logout()` | `clearSession` + wipe `me`, billing flags, companies, documents, selection |
+| `logout()` | `clearSession` + wipe `me`, billing flags, `usage` / `isLoadingUsage` / `usageError`, companies, documents, selection |
+| `loadUsage()` | `getUsage()` → `GET /api/v1/billing/usage`. Sets `usage` on success, `usageError` on failure. `BillingScreen` calls it on mount |
 | `restoreSession()` | If `localStorage` has a session, `GET /auth/me` then `loadCompanies`; on failure, `logout()` |
+| `loadCompanies()` | `GET /companies` |
+| `createCompany(name)` | `POST /companies` → prepend → `selectCompany` |
+| `selectCompany(id)` | Reset documents/errors, then `loadDocuments` |
+| `loadDocuments()` | `GET /companies/{id}/documents` (no-op if nothing selected) |
+| `uploadDocuments(files)` | Show uploading rows → multipart POST → refresh list |
+| `ingestUrls(urls)` | `POST …/documents/from-url` → refresh list |
+| `deleteDocument(id)` | `DELETE` then drop the row locally |
+| `updateSuggestedQuestions(questions)` | `PATCH …/widget-config` → replace that company in `companies` |
 
 ### Selectors
 
@@ -103,15 +115,7 @@ One global store (the admin page is a singleton SPA, not an embeddable runtime).
 | `selectCanCreateCompany` | `me.limits.max_companies > companies.length` |
 | `selectCanIngestUrls` | `me.limits.url_ingestion === true` |
 
-Limits the API returns (see [`02-backend.md`](02-backend.md#plan-limits-and-ownership)): Basic 1 company and no URL ingest; Pro 10 companies and URL ingest; superadmin 10000 and URL ingest; no active plan is 0 companies and no URL ingest.
-| `loadCompanies()` | `GET /companies` |
-| `createCompany(name)` | `POST /companies` → prepend → `selectCompany` |
-| `selectCompany(id)` | Reset documents/errors, then `loadDocuments` |
-| `loadDocuments()` | `GET /companies/{id}/documents` (no-op if nothing selected) |
-| `uploadDocuments(files)` | Show uploading rows → multipart POST → refresh list |
-| `ingestUrls(urls)` | `POST …/documents/from-url` → refresh list |
-| `deleteDocument(id)` | `DELETE` then drop the row locally |
-| `updateSuggestedQuestions(questions)` | `PATCH …/widget-config` → replace that company in `companies` |
+Limits the API returns (see [`02-backend.md`](02-backend.md#plan-limits-and-ownership)): Basic 1 company and no URL ingest; Pro 10 companies and URL ingest; superadmin 10000 and URL ingest; no active plan is 0 companies and no URL ingest. `PlanLimits.monthly_cost_usd` (`shared/api/auth.ts`, on `me.limits`) is the included usage allowance: Basic `5`, Pro `50`, superadmin `-1`, no plan `0`. The usage bar reads `usage.allowance_usd`, which the backend copies from that same field.
 
 All async actions surface `ApiError.detail` via `toErrorMessage`. `createCompany`
 lets the form catch the throw (inline error). The others set store error fields.
@@ -132,6 +136,7 @@ boundary).
 | app (session boot, checkout poll) | `GET /api/v1/auth/me` | bearer |
 | billing Subscribe | `POST /api/v1/billing/checkout` body `{"plan":"basic"}` or `{"plan":"pro"}`, then `window.location.assign(checkout_url)` | bearer |
 | billing Manage subscription | `GET /api/v1/billing/portal` → `window.open(portal_url)` | bearer |
+| billing usage (`getUsage`) | `GET /api/v1/billing/usage` → `UsageSummary` | bearer |
 | companies-sidebar | `GET /api/v1/companies` | bearer |
 | create-company | `POST /api/v1/companies` | bearer |
 | company-detail | `GET /api/v1/companies/{id}/documents` | bearer |
@@ -215,8 +220,11 @@ copy is: `Payment received — your plan is being activated. Refresh in a minute
 
 #### Usage this period (`usage-section.tsx`)
 
-Below the plan cards, `UsageSection` reads `usage` from the store (loaded from
-`GET /api/v1/billing/usage`) and renders nothing until it arrives. It shows:
+Below the plan cards, `BillingScreen` calls `loadUsage()` on mount.
+`UsageSection` reads `usage` from the store and renders nothing until
+`getUsage()` resolves. `shared/api/billing.ts` types that payload as
+`UsageSummary`: `period_start`, `period_end`, `allowance_usd`, `used_usd`,
+`overage_usd`, and optional `pricing_tier`. The section shows:
 
 | Element | Source | Notes |
 |---|---|---|
