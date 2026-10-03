@@ -24,7 +24,7 @@ Local development still uses the root `docker-compose.yml` (`docker compose up -
 
 Tags: git SHA and `latest`. CI sets `IMAGE_TAG` to the commit SHA on the droplet `.env`.
 
-Admin and demo **inline** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at **image build** time. Changing those URLs requires a new CI build (repo secrets), not an edit of the VPS `.env`.
+Admin and demo **inline** `VITE_API_URL` and `VITE_WIDGET_CDN_URL` at **image build** time. Changing those URLs requires a new CI build (repo secrets), not an edit of the VPS `.env`. Demo also inlines `DEMO_COMPANY_ID` the same way (CI build-arg). Committed `demo/index.html` keeps the `cmp_YOUR_ID` placeholder so local compose — which bind-mounts `./demo` and does not run this rewrite — is not pinned to one Mongo tenant.
 
 ## Host ports
 
@@ -127,9 +127,9 @@ After it is up:
 | Backend | http://159.89.26.67:8000/health |
 | Admin | http://159.89.26.67:3001 |
 | Widget loader | http://159.89.26.67:1337/embed/v1/loader.js |
-| Demo | http://159.89.26.67:3002/?company_id=cmp_… |
+| Demo | http://159.89.26.67:3002/ (`?company_id=` overrides the baked-in default) |
 
-Create a company on **that** Admin, then open Demo with that `company_id`. A leftover `cmp_…` from another machine will 404.
+A fresh demo load uses the company id baked into the image at CI. Override with `?company_id=` from **that** Admin. A leftover `cmp_…` from another machine will 404.
 
 ### Later deploys
 
