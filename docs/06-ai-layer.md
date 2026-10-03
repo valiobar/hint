@@ -39,6 +39,7 @@ routes/assist.py          POST /chat (SSE) · POST /hint (JSON)
         prompts.py        CONDENSE_PROMPT · PAGE_STATE_PROMPT · ANSWER_SYSTEM · HINT_PROMPT + formatters
         chat_graph.py     ChatState · build_chat_graph(retrieval_service)
         hint_chain.py     build_hint_query · generate_hint
+        observability.py  trace_config(name, company_id) · shutdown_langfuse
         └─▶ services/retrieval_service.py   retrieve(company_id, query, k) → list[Chunk]
                                             Chunk.source_url from Chroma metadata when present
         └─▶ services/hint_cache.py          sha1 key · TTL · oldest-first eviction
@@ -290,6 +291,28 @@ Call-site defaults:
 | Answer | yes | factory default `0.2` | `400` |
 | Hint | no | `0.2` | `80` |
 
+## Observability (Langfuse)
+
+`ai/observability.py` is the only module that imports the Langfuse SDK.
+`routes/assist.py` and `hint_chain.py` pass the dict from
+`trace_config(name, company_id)` into the graph / LLM invoke, or pass nothing
+when it returns `None`.
+
+Tracing is off unless `LANGFUSE_ENABLED=true` **and** both keys are non-empty.
+A constructor failure logs a warning and returns `None`, so a bad config never
+fails `/chat` or `/hint`. Each request gets its own `CallbackHandler`. Trace
+name is `chat` or `hint`. Metadata sets `langfuse_user_id` to the tenant
+`company_id` (not a person) and tags `chat`/`hint`, `company:{id}`, and
+`provider:{llm_provider}`.
+
+A hint cache hit returns from `routes/assist.py` before `generate_hint`, so it
+emits no trace. Lifespan teardown calls `shutdown_langfuse()` (`flush` then
+`shutdown`) before Mongo closes.
+
+Langfuse cost is approximate dashboard data, not a billing source.
+`deepseek-flash` needs a custom model price in the Langfuse project; cache-hit
+and peak-hour discounts are not modeled.
+
 ## Environment variables
 
 Defined in `backend/app/config.py`. Compose passes the LLM and DeepSeek vars
@@ -303,6 +326,10 @@ below from `.env`.
 | `DEEPSEEK_API_KEY` | `""` | `create_chat_llm` | **Required** for `/chat` and `/hint` when `LLM_PROVIDER=deepseek`. Empty → 503. Upload and `/retrieve` are unaffected. |
 | `DEEPSEEK_MODEL` | `deepseek-flash` | `create_chat_llm` | Canonical Flash name. Legacy `deepseek-v4-flash` still works if set. |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | `create_chat_llm` | OpenAI-compatible DeepSeek endpoint |
+| `LANGFUSE_ENABLED` | `false` | `ai/observability.py` | `true` → trace `/chat` and `/hint`. Off or missing keys → no-op. Compose: `${LANGFUSE_ENABLED:-false}` |
+| `LANGFUSE_PUBLIC_KEY` | `""` | `ai/observability.py` | `pk-lf-…`. Never committed. Empty → tracing off. |
+| `LANGFUSE_SECRET_KEY` | `""` | `ai/observability.py` | `sk-lf-…`. Never committed. Empty → tracing off. |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | `ai/observability.py` | EU Cloud region. Compose: `${LANGFUSE_HOST:-https://cloud.langfuse.com}` |
 | `HINT_CACHE_TTL_SECONDS` | `3600` | `HintCache` | Not passed by compose (code default). |
 | `HINT_CACHE_MAX_ENTRIES` | `1024` | `HintCache` | Not passed by compose (code default). |
 
@@ -339,6 +366,8 @@ any LLM spend. The Phase 6 "backend re-validates caps" item is already free.
 | Second identical hint is still slow | Different `url` **path**, `selector_path`, or `element.text`; or process restarted | Cache key ignores query string only. Restart clears the in-process store. |
 | Follow-up answer drifts off-topic | Condense rewrite was empty or weak | Node falls back to the raw last user message if the rewrite is blank; otherwise tune `CONDENSE_PROMPT`. |
 | `ValueError: Unsupported LLM provider` | `LLM_PROVIDER` is not `deepseek` or `openai` | Set `LLM_PROVIDER=deepseek` or `openai`. |
+| No new traces, requests still succeed | `LANGFUSE_ENABLED=false`, keys empty, or client init failed | Tracing is a no-op. Check backend logs for `Langfuse client init failed`. |
+| Traces stop appearing under load | Langfuse Hobby quota (~50k units/month) drops overage | Requests are not blocked. Watch org usage in Langfuse. |
 
 ## Tests
 
@@ -350,6 +379,7 @@ Unit tests in `backend/tests/` use in-memory fakes (no Mongo / Chroma / network)
 | `test_hint_cache.py` | Key stability across query-string URL variants; TTL expiry; oldest-first eviction |
 | `test_hint_chain.py` | Query prefers `text` then `aria-label`; 140-char clamp; `source: null` on empty KB |
 | `test_llm_factory.py` | DeepSeek Flash client (base URL + thinking disabled); OpenAI uses `LLM_MODEL`; unknown provider raises |
+| `test_observability.py` | Tracing off by default; missing keys stay a no-op; enabled config carries tenant id, tags, and one callback |
 | `test_chat_graph.py` | Single message skips condense; retrieval called with `(company_id, query, 5)`; answer state non-empty; `assess_page` skips the LLM without captured elements and writes the blocker verdict into `page_state` otherwise |
 | `test_url_ingestion.py` | Chat sources prefer `source_url` over filename and dedupe mixed lists; retrieval mapping covered in `test_retrieval_service.py` |
 

@@ -371,7 +371,7 @@ Useful so testers do not file these as bugs:
   A registered Basic or Pro account does not
 - No OCR for scanned PDFs
 - No server-side chat history (refresh is `sessionStorage` only)
-- No analytics, thumbs-up/down, or theming API
+- No customer analytics UI, thumbs-up/down, or theming API. Optional Langfuse traces of `/chat` and `/hint` (`LANGFUSE_ENABLED`, default off) are operator debugging only — not an in-app usage view and not billing
 - Hover-hint cache dies when the backend process restarts
 - Not a generic web assistant — it only knows uploaded docs + the page
   snapshot

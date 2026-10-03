@@ -73,6 +73,9 @@ SSH in with your own key (`~/.ssh/digitalocean`), not a key from this repo.
    #   POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET
    #   POLAR_PRODUCT_ID_BASIC, POLAR_PRODUCT_ID_PRO
    #   POLAR_ENVIRONMENT=sandbox   # set production only after a signed sandbox webhook
+   #   LANGFUSE_ENABLED=false      # true traces /chat and /hint; missing keys stay a no-op
+   #   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY   # pk-lf-… / sk-lf-…; never commit
+   #   LANGFUSE_HOST=https://cloud.langfuse.com
    ```
 
    Production compose interpolates those Google and Polar keys from `.env` into the backend. `deploy.sh` does not require them. Empty values keep the code defaults: Google routes return 503, checkout / portal / `POST /api/v1/webhooks/polar` return 503, `POLAR_ENVIRONMENT` stays `sandbox`, and checkout plus Google send the browser back to `http://localhost:3001`.
@@ -175,6 +178,17 @@ See `.env.example` for optional `LLM_*`, `DEEPSEEK_*`, `EMBEDDING_MODEL`, cache,
 | `POLAR_ENVIRONMENT` | `sandbox` | `sandbox` or `production`. Stay on sandbox until a signed sandbox webhook is observed |
 | `POLAR_PRODUCT_ID_BASIC` | `""` | Checkout product for Basic |
 | `POLAR_PRODUCT_ID_PRO` | `""` | Checkout product for Pro |
+
+### Optional Langfuse keys (forwarded; not validated)
+
+`infrastructure/docker-compose.yml` passes these into the backend. Leave them unset to boot with tracing off. Langfuse cost figures are approximate and are not a billing source.
+
+| Variable | Default when unset | Why |
+|---|---|---|
+| `LANGFUSE_ENABLED` | `false` | `true` traces `/chat` and `/hint`. Off, or keys empty, is a no-op |
+| `LANGFUSE_PUBLIC_KEY` | `""` | `pk-lf-…` from the Cloud project. Never commit |
+| `LANGFUSE_SECRET_KEY` | `""` | `sk-lf-…`. Never commit |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | EU Cloud region |
 
 ## Useful commands (on the droplet)
 
